@@ -9,7 +9,7 @@ import time
 import httpx
 from fastapi.testclient import TestClient
 
-from pymupdf4llm_service.app import AGPL_SOURCE_URL, app
+from pymupdf4llm_service.app import AGPL_SOURCE_URL, _admission, app
 
 
 def test_health_names_the_agpl_source() -> None:
@@ -186,5 +186,125 @@ def test_a_request_past_the_queue_is_rejected(monkeypatch) -> None:
             responses = await asyncio.gather(*tasks)
         assert sorted(item.status_code for item in responses) == [200, 200, 429]
         assert calls == 2
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_request_keeps_the_slot_until_the_thread_finishes(monkeypatch) -> None:
+    current = 0
+    peak = 0
+    lock = threading.Lock()
+    release = threading.Event()
+
+    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict:
+        nonlocal current, peak
+        with lock:
+            current += 1
+            peak = max(peak, current)
+        assert release.wait(5)
+        with lock:
+            current -= 1
+        return {"page_count": 1, "pages": [{"page": 1, "markdown": "ok"}]}
+
+    monkeypatch.setattr("pymupdf4llm_service.app.pdf_to_page_markdown", slow)
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            first = asyncio.create_task(
+                client.post(
+                    "/v1/convert",
+                    files={"file": ("a.pdf", b"%PDF-1.4", "application/pdf")},
+                )
+            )
+            for _ in range(50):
+                with lock:
+                    if current == 1:
+                        break
+                await asyncio.sleep(0.05)
+            with lock:
+                assert current == 1
+            first.cancel()
+            await asyncio.wait([first], timeout=2)
+            assert first.done()
+            await asyncio.sleep(0.2)
+            second = asyncio.create_task(
+                client.post(
+                    "/v1/convert",
+                    files={"file": ("b.pdf", b"%PDF-1.4", "application/pdf")},
+                )
+            )
+            await asyncio.sleep(0.2)
+            with lock:
+                assert current == 1
+                assert peak == 1
+            release.set()
+            response = await asyncio.wait_for(second, timeout=5)
+        assert response.status_code == 200
+        assert peak == 1
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_conversion_still_fills_the_queue(monkeypatch) -> None:
+    calls = 0
+    calls_lock = threading.Lock()
+    release = threading.Event()
+
+    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict:
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+        assert release.wait(5)
+        return {"page_count": 1, "pages": [{"page": 1, "markdown": "ok"}]}
+
+    monkeypatch.setattr("pymupdf4llm_service.app.pdf_to_page_markdown", slow)
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            first = asyncio.create_task(
+                client.post(
+                    "/v1/convert",
+                    files={"file": ("a.pdf", b"%PDF-1.4", "application/pdf")},
+                )
+            )
+            for _ in range(50):
+                with calls_lock:
+                    started = calls
+                if started == 1:
+                    break
+                await asyncio.sleep(0.05)
+            assert started == 1
+            second = asyncio.create_task(
+                client.post(
+                    "/v1/convert",
+                    files={"file": ("b.pdf", b"%PDF-1.4", "application/pdf")},
+                )
+            )
+            for _ in range(50):
+                if _admission.admitted == 2:
+                    break
+                await asyncio.sleep(0.05)
+            assert _admission.admitted == 2
+            with calls_lock:
+                assert calls == 1
+            first.cancel()
+            await asyncio.wait([first], timeout=2)
+            assert first.done()
+            assert _admission.admitted == 2
+            third = await client.post(
+                "/v1/convert",
+                files={"file": ("c.pdf", b"%PDF-1.4", "application/pdf")},
+            )
+            assert third.status_code == 429
+            assert third.json()["detail"] == "too many PDFs are already waiting"
+            with calls_lock:
+                assert calls == 1
+            release.set()
+            second_response = await asyncio.wait_for(second, timeout=5)
+        assert second_response.status_code == 200
+        with calls_lock:
+            assert calls == 2
 
     asyncio.run(scenario())
