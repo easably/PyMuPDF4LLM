@@ -39,10 +39,35 @@ def test_mixed_pdf_runs_ocr_only_on_the_scan(monkeypatch) -> None:
 def test_russian_scan_uses_the_requested_language(monkeypatch) -> None:
     calls = _spy_on_ocr(monkeypatch)
     result = pdf_to_page_markdown(
-        mixed_pdf("Maintenance interval 10 hours", "Насос масла", cyrillic_scan=True),
+        mixed_pdf("Maintenance interval 10 hours", "Насос масла", cjk_font=True),
         ocr_language="rus",
     )
 
     assert calls == [(1, "rus")]
     assert "10 hours" in result["pages"][0]["markdown"]
     assert "Насос масла" in result["pages"][1]["markdown"]
+
+
+def test_german_scan_uses_the_requested_language(monkeypatch) -> None:
+    calls = _spy_on_ocr(monkeypatch)
+    result = pdf_to_page_markdown(
+        mixed_pdf("Maintenance interval 10 hours", "Kühlmittelstand prüfen"),
+        ocr_language="deu",
+    )
+
+    assert calls == [(1, "deu")]
+    assert "10 hours" in result["pages"][0]["markdown"]
+    assert "Kühlmittelstand prüfen" in result["pages"][1]["markdown"]
+
+
+def test_chinese_scan_uses_the_requested_language(monkeypatch) -> None:
+    calls = _spy_on_ocr(monkeypatch)
+    result = pdf_to_page_markdown(
+        mixed_pdf("Maintenance interval 10 hours", "每日保养", cjk_font=True),
+        ocr_language="chi_sim",
+    )
+
+    assert calls == [(1, "chi_sim")]
+    assert "10 hours" in result["pages"][0]["markdown"]
+    # The markdown writer separates recognized characters with spaces.
+    assert "每日保养" in "".join(result["pages"][1]["markdown"].split())

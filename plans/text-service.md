@@ -56,7 +56,7 @@ OCR follows PyMuPDF4LLM defaults: `use_ocr=true`, `force_ocr=false`. The library
 
 The OCR engine is the Tesseract build already inside PyMuPDF. The image adds the full fast language set (`tessdata_fast`): every language and script in that set. `TESSDATA_PREFIX` points at those files. `ocr_language` defaults to `eng`. A caller may pass any installed code, or several joined with `+` (`rus`, `deu`, `chi_sim`, `eng+rus`).
 
-A conversion runs on a worker thread, so `GET /health` still answers while a PDF is being read. `MAX_CONCURRENT_CONVERTS` limits how many PDFs are read at once (default 1).
+A conversion runs on a worker thread, so `GET /health` still answers while a PDF is being read. `MAX_CONCURRENT_CONVERTS` limits how many PDFs are read at once (default 1). `MAX_QUEUED_CONVERTS` limits how many may wait without holding the file in memory (default 1). A further upload gets `429`.
 
 The service converts the file it receives. It does not decide the 10-page rule. The caller does.
 

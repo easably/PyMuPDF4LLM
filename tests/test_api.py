@@ -138,3 +138,53 @@ def test_one_conversion_runs_at_a_time(monkeypatch) -> None:
         assert peak == 1
 
     asyncio.run(scenario())
+
+
+def test_a_request_past_the_queue_is_rejected(monkeypatch) -> None:
+    release = threading.Event()
+    calls = 0
+    calls_lock = threading.Lock()
+
+    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict:
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+        assert release.wait(5)
+        return {"page_count": 1, "pages": [{"page": 1, "markdown": "ok"}]}
+
+    monkeypatch.setattr("pymupdf4llm_service.app.pdf_to_page_markdown", slow)
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            tasks = [
+                asyncio.create_task(
+                    client.post(
+                        "/v1/convert",
+                        files={"file": (f"{index}.pdf", b"%PDF-1.4", "application/pdf")},
+                    )
+                )
+                for index in range(3)
+            ]
+            rejected = None
+            started = 0
+            for _ in range(40):
+                finished = [task for task in tasks if task.done()]
+                rejected = next(
+                    (task.result() for task in finished if task.result().status_code == 429),
+                    None,
+                )
+                with calls_lock:
+                    started = calls
+                if rejected is not None and started >= 1:
+                    break
+                await asyncio.sleep(0.05)
+            assert rejected is not None
+            assert rejected.json()["detail"] == "too many PDFs are already waiting"
+            assert started == 1
+            release.set()
+            responses = await asyncio.gather(*tasks)
+        assert sorted(item.status_code for item in responses) == [200, 200, 429]
+        assert calls == 2
+
+    asyncio.run(scenario())

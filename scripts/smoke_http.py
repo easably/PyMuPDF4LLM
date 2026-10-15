@@ -11,7 +11,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tests.text_layer_pdf import mixed_pdf, text_layer_pdf
+from tests.text_layer_pdf import mixed_pdf
 
 
 def wait_until_healthy(client: httpx.Client) -> None:
@@ -53,17 +53,25 @@ def main() -> None:
             raise SystemExit(f"english pages missing text: {english!r}")
         russian = convert(
             client,
-            mixed_pdf("Maintenance interval 10 hours", "Насос масла", cyrillic_scan=True),
+            mixed_pdf("Maintenance interval 10 hours", "Насос масла", cjk_font=True),
             "rus",
         )
         if "Насос масла" not in russian:
             raise SystemExit(f"russian scan missing text: {russian!r}")
-        german = convert(client, text_layer_pdf("Maintenance interval 10 hours"), "deu")
-        if "10 hours" not in german:
-            raise SystemExit(f"german code was not accepted: {german!r}")
-        chinese = convert(client, text_layer_pdf("Maintenance interval 10 hours"), "chi_sim")
-        if "10 hours" not in chinese:
-            raise SystemExit(f"chinese code was not accepted: {chinese!r}")
+        german = convert(
+            client,
+            mixed_pdf("Maintenance interval 10 hours", "Kühlmittelstand prüfen"),
+            "deu",
+        )
+        if "Kühlmittelstand prüfen" not in german:
+            raise SystemExit(f"german scan missing text: {german!r}")
+        chinese = convert(
+            client,
+            mixed_pdf("Maintenance interval 10 hours", "每日保养", cjk_font=True),
+            "chi_sim",
+        )
+        if "每日保养" not in "".join(chinese.split()):
+            raise SystemExit(f"chinese scan missing text: {chinese!r}")
     print("http smoke ok")
 
 

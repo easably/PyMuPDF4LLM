@@ -2,38 +2,23 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 from pymupdf4llm_service.pdf_to_page_markdown import (
     UnsupportedOcrLanguage,
-    installed_ocr_languages,
     pdf_to_page_markdown,
 )
 from tests.text_layer_pdf import text_layer_pdf
 
-_BROAD_SET = {
-    "eng",
-    "rus",
-    "deu",
-    "fra",
-    "spa",
-    "pol",
-    "ukr",
-    "chi_sim",
-    "jpn",
-    "kor",
-    "ara",
-    "hin",
-    "heb",
-    "script/Latin",
-    "script/Cyrillic",
-}
 
-
-def test_language_files_cover_the_fast_set() -> None:
-    codes = set(installed_ocr_languages())
-    assert _BROAD_SET <= codes
-    assert len(codes) >= 100
+def test_language_files_match_the_pinned_manifest() -> None:
+    script = Path(__file__).resolve().parents[1] / "scripts" / "fetch_tessdata.py"
+    completed = subprocess.run([sys.executable, str(script), "--check"], check=False)
+    assert completed.returncode == 0
 
 
 @pytest.mark.parametrize("language", ["deu", "chi_sim", "eng+rus", "script/Latin"])

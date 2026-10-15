@@ -8,6 +8,7 @@ dictionaries it reads. The destination is ``TESSDATA_PREFIX``, or
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import sys
@@ -21,8 +22,6 @@ TESSDATA_URL = (
     "https://github.com/tesseract-ocr/tessdata_fast/archive/"
     f"{TESSDATA_COMMIT}.tar.gz"
 )
-# eng, rus, and a language code with an underscore must all be present.
-_REQUIRED = ("eng.traineddata", "rus.traineddata", "chi_sim.traineddata")
 
 
 def destination() -> Path:
@@ -32,10 +31,49 @@ def destination() -> Path:
     return Path(__file__).resolve().parents[1] / "tessdata"
 
 
-def _already_complete(dest: Path) -> bool:
-    if not all((dest / name).is_file() for name in _REQUIRED):
-        return False
-    return sum(1 for _ in dest.rglob("*.traineddata")) >= 100
+def manifest_path() -> Path:
+    configured = os.environ.get("TESSDATA_MANIFEST")
+    if configured:
+        return Path(configured)
+    return Path(__file__).resolve().parent / "tessdata.sha256"
+
+
+def load_manifest() -> dict[str, str]:
+    """Pinned sha256 for every language file. The key is the path inside tessdata."""
+    path = manifest_path()
+    if not path.is_file():
+        raise SystemExit(f"missing language manifest {path}")
+    entries: dict[str, str] = {}
+    for line_number, line in enumerate(path.read_text().splitlines(), start=1):
+        if not line.strip():
+            continue
+        digest, separator, name = line.partition(" ")
+        name = name.strip()
+        if separator != " " or len(digest) != 64 or not name or name in entries:
+            raise SystemExit(f"bad language manifest line {line_number}")
+        entries[name] = digest
+    if not entries:
+        raise SystemExit(f"language manifest {path} is empty")
+    return entries
+
+
+def verify(dest: Path) -> list[str]:
+    """Return one error per missing, extra, or changed language file."""
+    expected = load_manifest()
+    found: dict[str, str] = {}
+    if dest.is_dir():
+        for path in dest.rglob("*.traineddata"):
+            relative = path.relative_to(dest).as_posix()
+            found[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+    errors: list[str] = []
+    for name in sorted(set(expected) - set(found)):
+        errors.append(f"missing {name}")
+    for name in sorted(set(found) - set(expected)):
+        errors.append(f"unexpected {name}")
+    for name in sorted(set(expected) & set(found)):
+        if found[name] != expected[name]:
+            errors.append(f"checksum mismatch {name}")
+    return errors
 
 
 def fetch(dest: Path) -> int:
@@ -96,14 +134,20 @@ def _traineddata_path(name: str) -> Path | None:
 
 
 def main() -> int:
+    check_only = "--check" in sys.argv[1:]
     dest = destination()
-    if _already_complete(dest):
-        count = sum(1 for _ in dest.rglob("*.traineddata"))
-        print(f"{count} language files already in {dest}")
+    errors = verify(dest)
+    if not errors:
+        print(f"{len(load_manifest())} language files match the pinned set in {dest}")
         return 0
+    if check_only:
+        print("\n".join(errors), file=sys.stderr)
+        return 1
     written = fetch(dest)
-    if not _already_complete(dest):
-        print(f"language data in {dest} is incomplete ({written} files)", file=sys.stderr)
+    errors = verify(dest)
+    if errors:
+        print("\n".join(errors), file=sys.stderr)
+        print(f"language data in {dest} does not match the pinned set", file=sys.stderr)
         return 1
     print(f"downloaded {written} language files into {dest}")
     return 0

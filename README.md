@@ -23,7 +23,7 @@ This program is free software under the GNU Affero General Public License versio
 
 `page` is 1-based. Empty pages are omitted. `force_ocr=true` is rejected.
 
-The image contains the full Tesseract fast language set. `TESSDATA_PREFIX` inside the container is `/usr/share/tessdata`. `MAX_CONCURRENT_CONVERTS` (default `1`) limits how many PDFs are converted at once. `GET /health` keeps answering during a conversion.
+The image contains the full Tesseract fast language set. `TESSDATA_PREFIX` inside the container is `/usr/share/tessdata`. `MAX_CONCURRENT_CONVERTS` (default `1`) limits how many PDFs are converted at once. `MAX_QUEUED_CONVERTS` (default `1`) limits how many may wait. A further upload gets `429`. `GET /health` keeps answering during a conversion.
 
 On a Docker network the address is `http://pymupdf4llm:8080`. The port does not need to be published to the internet.
 

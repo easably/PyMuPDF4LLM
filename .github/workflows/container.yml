@@ -64,9 +64,8 @@ jobs:
       - name: HTTP smoke
         run: |
           docker run -d --name pymupdf4llm-smoke -p 8080:8080 pymupdf4llm:ci
-          count=$(docker exec pymupdf4llm-smoke python -c "from pathlib import Path; import os; root=Path(os.environ['TESSDATA_PREFIX']); print(sum(1 for _ in root.rglob('*.traineddata')))")
-          echo "language files: $count"
-          test "$count" -ge 100
+          docker cp scripts pymupdf4llm-smoke:/tmp/scripts
+          docker exec -e TESSDATA_PREFIX=/usr/share/tessdata pymupdf4llm-smoke python /tmp/scripts/fetch_tessdata.py --check
           python scripts/smoke_http.py http://127.0.0.1:8080
       - name: Remove smoke container
         if: always()
