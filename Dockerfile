@@ -9,6 +9,10 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY scripts/fetch_tessdata.py /tmp/fetch_tessdata.py
+ENV TESSDATA_PREFIX=/usr/share/tessdata
+RUN python /tmp/fetch_tessdata.py && rm /tmp/fetch_tessdata.py
+
 COPY src ./src
 
 ENV PYTHONPATH=/app/src

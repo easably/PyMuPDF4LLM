@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
+import time
+
+import httpx
 from fastapi.testclient import TestClient
 
 from pymupdf4llm_service.app import AGPL_SOURCE_URL, app
@@ -54,3 +59,82 @@ def test_convert_returns_non_empty_pages(monkeypatch) -> None:
     )
     assert response.status_code == 200
     assert response.json()["pages"] == [{"page": 1, "markdown": "Pump oil"}]
+
+
+def test_health_answers_while_a_conversion_runs(monkeypatch) -> None:
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict:
+        started.set()
+        assert release.wait(5)
+        return {"page_count": 1, "pages": [{"page": 1, "markdown": "ok"}]}
+
+    monkeypatch.setattr("pymupdf4llm_service.app.pdf_to_page_markdown", slow)
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            task = asyncio.create_task(
+                client.post(
+                    "/v1/convert",
+                    files={"file": ("manual.pdf", b"%PDF-1.4", "application/pdf")},
+                )
+            )
+            for _ in range(50):
+                if started.is_set():
+                    break
+                await asyncio.sleep(0.05)
+            assert started.is_set()
+            health = await asyncio.wait_for(client.get("/health"), timeout=2)
+            assert health.status_code == 200
+            release.set()
+            response = await task
+            assert response.status_code == 200
+
+    worker = threading.Thread(target=lambda: asyncio.run(scenario()))
+    worker.start()
+    worker.join(8)
+    if worker.is_alive():
+        release.set()
+        worker.join(2)
+        raise AssertionError("health did not answer while a conversion was running")
+
+
+def test_one_conversion_runs_at_a_time(monkeypatch) -> None:
+    current = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict:
+        nonlocal current, peak
+        with lock:
+            current += 1
+            peak = max(peak, current)
+        time.sleep(0.3)
+        with lock:
+            current -= 1
+        return {"page_count": 1, "pages": [{"page": 1, "markdown": "ok"}]}
+
+    monkeypatch.setattr("pymupdf4llm_service.app.pdf_to_page_markdown", slow)
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            first = asyncio.create_task(
+                client.post(
+                    "/v1/convert",
+                    files={"file": ("a.pdf", b"%PDF-1.4", "application/pdf")},
+                )
+            )
+            second = asyncio.create_task(
+                client.post(
+                    "/v1/convert",
+                    files={"file": ("b.pdf", b"%PDF-1.4", "application/pdf")},
+                )
+            )
+            done = await asyncio.gather(first, second)
+        assert [item.status_code for item in done] == [200, 200]
+        assert peak == 1
+
+    asyncio.run(scenario())

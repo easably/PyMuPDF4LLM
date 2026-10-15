@@ -54,7 +54,9 @@ OCR follows PyMuPDF4LLM defaults: `use_ocr=true`, `force_ocr=false`. The library
 
 `force_ocr=true` is refused by this service. It would re-read every text page and make a long manual slow again. A caller who must re-read one bad page sends that page range later; the first version has no such parameter.
 
-The image installs one OCR engine (`rapidocr-onnxruntime`) so a scan page is not silently returned empty. OCR language defaults to `eng`. The caller may pass `ocr_language` (for example `rus`).
+The OCR engine is the Tesseract build already inside PyMuPDF. The image adds the full fast language set (`tessdata_fast`): every language and script in that set. `TESSDATA_PREFIX` points at those files. `ocr_language` defaults to `eng`. A caller may pass any installed code, or several joined with `+` (`rus`, `deu`, `chi_sim`, `eng+rus`).
+
+A conversion runs on a worker thread, so `GET /health` still answers while a PDF is being read. `MAX_CONCURRENT_CONVERTS` limits how many PDFs are read at once (default 1).
 
 The service converts the file it receives. It does not decide the 10-page rule. The caller does.
 
@@ -117,9 +119,9 @@ The file bytes are not inlined in that JSON. The caller fetches the file by `id`
 ## Build order
 
 1. Replace `LICENSE` with AGPL-3.0. State that license and the source URL in the README.
-2. Python project pinned to `pymupdf4llm`. Application code imports that package only.
+2. Python project pinned to `pymupdf4llm==1.28.2` and `pymupdf==1.28.2` (the version that package requires). Application code imports `pymupdf4llm` to convert and `pymupdf` to open the PDF bytes.
 3. `GET /health` and `POST /v1/convert` as specified above.
-4. Dockerfile with `rapidocr-onnxruntime`. Document the in-network URL `http://pymupdf4llm:8080`.
+4. Dockerfile that downloads the fast Tesseract language set and sets `TESSDATA_PREFIX`. Document the in-network URL `http://pymupdf4llm:8080`.
 5. Two smoke checks. A text-layer PDF finishes in seconds and does not OCR those pages. A mixed file (text pages plus one scan page) returns text for both, and only the scan page goes through OCR.
 
 ## Out of scope

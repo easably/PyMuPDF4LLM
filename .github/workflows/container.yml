@@ -20,7 +20,12 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
+      - run: python scripts/fetch_tessdata.py
+        env:
+          TESSDATA_PREFIX: ${{ github.workspace }}/tessdata
       - run: pytest
+        env:
+          TESSDATA_PREFIX: ${{ github.workspace }}/tessdata
 
   image:
     needs: test
@@ -44,8 +49,34 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          push: ${{ github.event_name == 'push' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          load: true
+          push: false
+          tags: |
+            pymupdf4llm:ci
+            ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pymupdf==1.28.2 httpx==0.28.1
+      - name: HTTP smoke
+        run: |
+          docker run -d --name pymupdf4llm-smoke -p 8080:8080 pymupdf4llm:ci
+          count=$(docker exec pymupdf4llm-smoke python -c "from pathlib import Path; import os; root=Path(os.environ['TESSDATA_PREFIX']); print(sum(1 for _ in root.rglob('*.traineddata')))")
+          echo "language files: $count"
+          test "$count" -ge 100
+          python scripts/smoke_http.py http://127.0.0.1:8080
+      - name: Remove smoke container
+        if: always()
+        run: docker rm -f pymupdf4llm-smoke
+      - name: Push image
+        if: github.event_name == 'push'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker push "$tag"
+          done <<< "$TAGS"

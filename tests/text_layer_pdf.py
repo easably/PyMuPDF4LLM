@@ -13,3 +13,29 @@ def text_layer_pdf(*page_texts: str) -> bytes:
     data = document.tobytes()
     document.close()
     return data
+
+
+def mixed_pdf(text_page: str, scan_text: str, *, cyrillic_scan: bool = False) -> bytes:
+    """One selectable page, then one page that is only a picture of text."""
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), text_page, fontsize=16)
+    scan = document.new_page()
+    scan.insert_image(scan.rect, pixmap=_text_pixmap(scan_text, cyrillic=cyrillic_scan))
+    data = document.tobytes()
+    document.close()
+    return data
+
+
+def _text_pixmap(text: str, *, cyrillic: bool) -> pymupdf.Pixmap:
+    source = pymupdf.open()
+    page = source.new_page()
+    if cyrillic:
+        font = pymupdf.Font("cjk")
+        page.insert_font(fontname="cjk", fontbuffer=font.buffer)
+        page.insert_text((72, 200), text, fontsize=36, fontname="cjk")
+    else:
+        page.insert_text((72, 200), text, fontsize=28)
+    pixmap = page.get_pixmap(dpi=150, colorspace=pymupdf.csRGB)
+    source.close()
+    return pixmap

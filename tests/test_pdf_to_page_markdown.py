@@ -7,6 +7,7 @@ import pytest
 from pymupdf4llm_service.pdf_to_page_markdown import (
     InvalidPdf,
     UnsupportedOcrLanguage,
+    ocr_page,
     pdf_to_page_markdown,
 )
 from tests.text_layer_pdf import text_layer_pdf
@@ -17,6 +18,7 @@ def test_skips_empty_pages_and_keeps_scan_text(monkeypatch) -> None:
         assert kwargs["use_ocr"] is True
         assert kwargs["force_ocr"] is False
         assert kwargs["page_chunks"] is True
+        assert kwargs["ocr_function"] is ocr_page
         return [
             {"metadata": {"page_number": 1}, "text": "Daily grease points"},
             {"metadata": {"page_number": 2}, "text": "   "},
