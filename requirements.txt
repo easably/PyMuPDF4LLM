@@ -1,0 +1,5 @@
+fastapi==0.115.12
+uvicorn==0.34.2
+python-multipart==0.0.20
+pymupdf4llm==1.28.2
+rapidocr-onnxruntime==1.2.3
