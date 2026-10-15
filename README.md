@@ -12,11 +12,16 @@ This program is free software under the GNU Affero General Public License versio
 
 `POST /v1/convert` with multipart field `file` (a PDF). Optional form field `ocr_language` (default `eng`). Any language in the image is accepted, including codes such as `rus`, `deu`, `chi_sim`, or a combination such as `eng+rus`.
 
+`page` is 1-based. Empty pages are omitted. `force_ocr=true` is rejected. Embedded pictures are cut in the same read. Their bytes are not in the JSON. Fetch each one with `GET /v1/pictures/{id}` (`image/png`). A picture is skipped before decode when its compressed stream is over 8 MiB, its pixel size would exceed the 64 MiB budget, or that size cannot be measured. At most 80 pictures are kept. The in-memory store for all PDFs together stays within 64 MiB (`MAX_PICTURE_STORE_BYTES`). A fetched picture is removed. Unfetched pictures expire after ten minutes. `PICTURE_EXTRACT_TIMEOUT_SECONDS` (default 20) stops the cut between pictures. It does not interrupt one picture that has already started decoding.
+
 ```json
 {
   "page_count": 2,
   "pages": [
     {"page": 1, "markdown": "..."}
+  ],
+  "pictures": [
+    {"id": "picture-id", "page": 1, "index_on_page": 0, "width": 800, "height": 600}
   ]
 }
 ```

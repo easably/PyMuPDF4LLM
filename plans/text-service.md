@@ -98,12 +98,9 @@ Wiring on the Doc2Graph side, when that work starts:
 
 ## Later stage: picture files, then captions
 
-Not part of the first build. Two steps, in this order. The second step does not run inside the cut.
+The cut is part of `POST /v1/convert`. In the same open as the text, each embedded picture is measured before decode and stored for `GET /v1/pictures/{id}`. The JSON lists `id`, `page`, `index_on_page`, `width`, and `height`. The bytes are not inlined.
 
-1. **Cut and store.** In the same pass as the text, write each embedded picture to a file. Keep the page number and the size. This is file output, not a layout model, so a long text PDF stays on the fast path.
-2. **Caption later.** A vision model writes what the picture shows only after the file is already stored. That call is the slow part. It is a separate job from the cut. A picture with no caption yet is still a stored file.
-
-The convert response grows a picture list only in this stage. The first build has no picture fields.
+Captions are still a separate later job. A vision model writes what the picture shows only after the caller has fetched the file. That call is not part of this service.
 
 ```json
 {
@@ -113,8 +110,6 @@ The convert response grows a picture list only in this stage. The first build ha
   ]
 }
 ```
-
-The file bytes are not inlined in that JSON. The caller fetches the file by `id`.
 
 ## Build order
 

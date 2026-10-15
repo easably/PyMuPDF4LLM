@@ -16,6 +16,8 @@ from typing import Any
 import pymupdf
 import pymupdf4llm
 
+from pymupdf4llm_service.pictures import cut_embedded_pictures
+
 # Tesseract codes, including chi_sim and script/Latin. Several may be joined with +.
 _LANGUAGE_PART = re.compile(r"(?:[A-Za-z][A-Za-z0-9_]*|script/[A-Za-z][A-Za-z0-9_]*)")
 
@@ -57,13 +59,17 @@ def pdf_to_page_markdown(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict
             ocr_function=ocr_page,
             show_progress=False,
         )
+        if not isinstance(chunks, list):
+            raise RuntimeError("PyMuPDF4LLM did not return one chunk per page")
+        pictures = cut_embedded_pictures(document)
     finally:
         document.close()
 
-    if not isinstance(chunks, list):
-        raise RuntimeError("PyMuPDF4LLM did not return one chunk per page")
-
-    return {"page_count": page_count, "pages": _non_empty_pages(chunks)}
+    return {
+        "page_count": page_count,
+        "pages": _non_empty_pages(chunks),
+        "pictures": pictures,
+    }
 
 
 def ocr_page(page, dpi=150, language="eng", keep_ocr_text=False, pixmap=None):

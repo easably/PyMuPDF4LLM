@@ -10,7 +10,7 @@ import os
 import threading
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from pymupdf4llm_service.pdf_to_page_markdown import (
     InvalidPdf,
@@ -18,6 +18,7 @@ from pymupdf4llm_service.pdf_to_page_markdown import (
     UnsupportedOcrLanguage,
     pdf_to_page_markdown,
 )
+from pymupdf4llm_service.pictures import picture_store
 
 AGPL_SOURCE_URL = "https://github.com/easably/PyMuPDF4LLM"
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(150 * 1024 * 1024)))
@@ -28,7 +29,7 @@ if _CONVERT_LIMIT < 1:
 if _QUEUE_LIMIT < 0:
     raise RuntimeError("MAX_QUEUED_CONVERTS must be at least 0")
 
-app = FastAPI(title="PyMuPDF4LLM text service", version="0.1.0")
+app = FastAPI(title="PyMuPDF4LLM text service", version="0.2.1")
 
 
 class _InFlight:
@@ -86,6 +87,16 @@ async def reject_when_the_queue_is_full(request: Request, call_next):
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "license": "AGPL-3.0", "source": AGPL_SOURCE_URL}
+
+
+@app.get("/v1/pictures/{picture_id}")
+async def fetch_picture(picture_id: str) -> Response:
+    if not picture_id.replace("-", "").replace("_", "").isalnum():
+        raise HTTPException(status_code=404, detail="picture not found")
+    png = picture_store.get(picture_id)
+    if png is None:
+        raise HTTPException(status_code=404, detail="picture not found")
+    return Response(content=png, media_type="image/png")
 
 
 @app.post("/v1/convert")
