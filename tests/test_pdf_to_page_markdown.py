@@ -15,7 +15,8 @@ from tests.text_layer_pdf import text_layer_pdf
 
 def test_skips_empty_pages_and_keeps_scan_text(monkeypatch) -> None:
     def fake_to_markdown(*_args, **kwargs):
-        assert kwargs["use_ocr"] is True
+        assert kwargs["pages"] == [0]
+        assert kwargs["use_ocr"] is False
         assert kwargs["force_ocr"] is False
         assert kwargs["page_chunks"] is True
         assert kwargs["ocr_function"] is ocr_page

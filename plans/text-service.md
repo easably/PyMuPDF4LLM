@@ -43,14 +43,16 @@ Listen inside the container on port `8080`.
 
 `page` is 1-based. Empty pages are omitted.
 
-OCR follows PyMuPDF4LLM defaults: `use_ocr=true`, `force_ocr=false`. The library decides per page:
+The service permits OCR only when a page has no selectable text. PyMuPDF4LLM
+may request OCR for an image on a text page, but the service declines that
+request because it is slow and often adds noisy diagram text.
 
 | Page | What happens |
 |---|---|
 | Selectable text | Text layer only. OCR does not run. |
 | No selectable text, looks like a scan | OCR on that page only. |
-| Text layer is garbled | OCR on the broken spans only. |
-| Photo or diagram, not a page of text | Not treated as a scan. The page text stays from the text layer. |
+| Text layer is garbled but non-empty | Text layer only. |
+| Photo, diagram, or table on a text page | Text layer only. Image text is not added. |
 
 `force_ocr=true` is refused by this service. It would re-read every text page and make a long manual slow again. A caller who must re-read one bad page sends that page range later; the first version has no such parameter.
 

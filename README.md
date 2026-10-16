@@ -74,3 +74,7 @@ PYTHONPATH=src .venv/bin/uvicorn pymupdf4llm_service.app:app --port 8080
 ```
 
 `fetch_tessdata.py` writes the language files to `tessdata/` (or to `TESSDATA_PREFIX`, when that variable is set). That directory is not committed.
+
+## Acceptance run
+
+`scripts/accept_cat_manual.py` is a manual check for one long local PDF. pytest and CI do not run it and do not need the file. How to run it, and the recorded runs, are in `acceptance/cat-operator-manual/`.

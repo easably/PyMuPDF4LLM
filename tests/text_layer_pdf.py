@@ -27,7 +27,18 @@ def mixed_pdf(text_page: str, scan_text: str, *, cjk_font: bool = False) -> byte
     return data
 
 
-def _text_pixmap(text: str, *, cjk_font: bool) -> pymupdf.Pixmap:
+def text_and_scan_same_page(text: str, scan_text: str) -> bytes:
+    """A text layer plus a large image that PyMuPDF4LLM asks to OCR."""
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_image((0, 100, page.rect.width, page.rect.height), pixmap=_text_pixmap(scan_text))
+    page.insert_text((72, 72), text, fontsize=16)
+    data = document.tobytes()
+    document.close()
+    return data
+
+
+def _text_pixmap(text: str, *, cjk_font: bool = False) -> pymupdf.Pixmap:
     source = pymupdf.open()
     page = source.new_page()
     if cjk_font:

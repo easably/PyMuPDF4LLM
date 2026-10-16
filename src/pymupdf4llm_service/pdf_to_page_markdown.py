@@ -63,15 +63,7 @@ def pdf_to_page_markdown(
             raise InvalidPdf("file is not a readable PDF") from exc
         try:
             page_count = document.page_count
-            chunks = pymupdf4llm.to_markdown(
-                document,
-                page_chunks=True,
-                use_ocr=True,
-                force_ocr=False,
-                ocr_language=language,
-                ocr_function=ocr_page,
-                show_progress=False,
-            )
+            chunks = _markdown_chunks(document, language)
             if not isinstance(chunks, list):
                 raise RuntimeError("PyMuPDF4LLM did not return one chunk per page")
             if include_pictures:
@@ -89,8 +81,47 @@ def pdf_to_page_markdown(
         }
 
 
+def _markdown_chunks(document: pymupdf.Document, language: str) -> list[dict[str, Any]]:
+    """Parse text pages without OCR and scan-only pages with OCR."""
+    scan_pages = [
+        page.number for page in document if not page.get_text("text").strip()
+    ]
+    scan_page_set = set(scan_pages)
+    text_pages = [
+        page_number
+        for page_number in range(document.page_count)
+        if page_number not in scan_page_set
+    ]
+    chunks: list[dict[str, Any]] = []
+    for pages, use_ocr in ((text_pages, False), (scan_pages, True)):
+        if not pages:
+            continue
+        parsed = pymupdf4llm.to_markdown(
+            document,
+            pages=pages,
+            page_chunks=True,
+            use_ocr=use_ocr,
+            force_ocr=False,
+            ocr_language=language,
+            ocr_function=ocr_page,
+            show_progress=False,
+        )
+        if not isinstance(parsed, list):
+            raise RuntimeError("PyMuPDF4LLM did not return one chunk per page")
+        chunks.extend(parsed)
+    chunks.sort(key=lambda chunk: _page_number(chunk) or 0)
+    return chunks
+
+
 def ocr_page(page, dpi=150, language="eng", keep_ocr_text=False, pixmap=None):
-    """Recognize one page. PyMuPDF4LLM calls this only for a page that needs OCR."""
+    """Recognize a scan-only page.
+
+    PyMuPDF4LLM may request OCR for pictures on a page that already has a
+    selectable text layer. The service deliberately declines those requests:
+    they are slow and can replace good reading order with noisy picture text.
+    """
+    if page.get_text("text").strip():
+        return None
     os.environ["TESSDATA_PREFIX"] = str(tessdata_dir())
     from pymupdf4llm.ocr.tesseract_api import exec_ocr
 

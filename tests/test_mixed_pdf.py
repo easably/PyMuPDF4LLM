@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pymupdf4llm_service.pdf_to_page_markdown import ocr_page, pdf_to_page_markdown
-from tests.text_layer_pdf import mixed_pdf
+from tests.text_layer_pdf import mixed_pdf, text_and_scan_same_page
 
 
 def _spy_on_ocr(monkeypatch) -> list[tuple[int, str]]:
@@ -34,6 +34,19 @@ def test_mixed_pdf_runs_ocr_only_on_the_scan(monkeypatch) -> None:
     assert [page["page"] for page in result["pages"]] == [1, 2]
     assert "10 hours" in result["pages"][0]["markdown"]
     assert "Nameplate serial 4821" in result["pages"][1]["markdown"]
+
+
+def test_page_with_selectable_text_does_not_ocr_its_picture(monkeypatch) -> None:
+    def fail(*_args, **_kwargs):
+        raise AssertionError("Tesseract must not run on a page with selectable text")
+
+    monkeypatch.setattr("pymupdf4llm.ocr.tesseract_api.exec_ocr", fail)
+    result = pdf_to_page_markdown(
+        text_and_scan_same_page("SELECTABLE CAPTION", "IMAGE TEXT 4821"),
+    )
+
+    assert "SELECTABLE CAPTION" in result["pages"][0]["markdown"]
+    assert "IMAGE TEXT 4821" not in result["pages"][0]["markdown"]
 
 
 def test_russian_scan_uses_the_requested_language(monkeypatch) -> None:
