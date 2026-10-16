@@ -16,7 +16,11 @@ from typing import Any
 import pymupdf
 import pymupdf4llm
 
-from pymupdf4llm_service.pictures import cut_embedded_pictures
+from pymupdf4llm_service.pictures import (
+    cut_embedded_pictures,
+    empty_picture_report,
+    picture_store,
+)
 
 # Tesseract codes, including chi_sim and script/Latin. Several may be joined with +.
 _LANGUAGE_PART = re.compile(r"(?:[A-Za-z][A-Za-z0-9_]*|script/[A-Za-z][A-Za-z0-9_]*)")
@@ -34,42 +38,55 @@ class OcrUnavailable(RuntimeError):
     """Tesseract is built in, but its language files are not installed."""
 
 
-def pdf_to_page_markdown(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict[str, Any]:
+def pdf_to_page_markdown(
+    pdf_bytes: bytes,
+    *,
+    ocr_language: str = "eng",
+    include_pictures: bool = False,
+) -> dict[str, Any]:
     """Return ``page_count`` and ``pages`` of ``{page, markdown}``.
 
-    Empty pages are omitted. ``page`` is 1-based.
+    Empty pages are omitted. ``page`` is 1-based. Pictures are cut only when
+    ``include_pictures`` is true, in the same open as the text.
     """
     language = _ocr_language_code(ocr_language)
     if not pdf_bytes.startswith(b"%PDF"):
         raise InvalidPdf("file is not a PDF")
     _require_language_files(language)
 
-    try:
-        document = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-    except pymupdf.FileDataError as exc:
-        raise InvalidPdf("file is not a readable PDF") from exc
-    try:
-        page_count = document.page_count
-        chunks = pymupdf4llm.to_markdown(
-            document,
-            page_chunks=True,
-            use_ocr=True,
-            force_ocr=False,
-            ocr_language=language,
-            ocr_function=ocr_page,
-            show_progress=False,
-        )
-        if not isinstance(chunks, list):
-            raise RuntimeError("PyMuPDF4LLM did not return one chunk per page")
-        pictures = cut_embedded_pictures(document)
-    finally:
-        document.close()
+    pictures: list[dict[str, Any]] = []
+    report = empty_picture_report(requested=include_pictures)
+    with picture_store.tracking():
+        try:
+            document = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+        except pymupdf.FileDataError as exc:
+            raise InvalidPdf("file is not a readable PDF") from exc
+        try:
+            page_count = document.page_count
+            chunks = pymupdf4llm.to_markdown(
+                document,
+                page_chunks=True,
+                use_ocr=True,
+                force_ocr=False,
+                ocr_language=language,
+                ocr_function=ocr_page,
+                show_progress=False,
+            )
+            if not isinstance(chunks, list):
+                raise RuntimeError("PyMuPDF4LLM did not return one chunk per page")
+            if include_pictures:
+                cut = cut_embedded_pictures(document)
+                pictures = cut["pictures"]
+                report = cut["report"]
+        finally:
+            document.close()
 
-    return {
-        "page_count": page_count,
-        "pages": _non_empty_pages(chunks),
-        "pictures": pictures,
-    }
+        return {
+            "page_count": page_count,
+            "pages": _non_empty_pages(chunks),
+            "pictures": pictures,
+            "picture_report": report,
+        }
 
 
 def ocr_page(page, dpi=150, language="eng", keep_ocr_text=False, pixmap=None):

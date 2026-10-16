@@ -29,7 +29,7 @@ if _CONVERT_LIMIT < 1:
 if _QUEUE_LIMIT < 0:
     raise RuntimeError("MAX_QUEUED_CONVERTS must be at least 0")
 
-app = FastAPI(title="PyMuPDF4LLM text service", version="0.2.1")
+app = FastAPI(title="PyMuPDF4LLM text service", version="0.3.0")
 
 
 class _InFlight:
@@ -85,8 +85,15 @@ async def reject_when_the_queue_is_full(request: Request, call_next):
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok", "license": "AGPL-3.0", "source": AGPL_SOURCE_URL}
+async def health() -> dict[str, str | int]:
+    stats = picture_store.stats()
+    return {
+        "status": "ok",
+        "license": "AGPL-3.0",
+        "source": AGPL_SOURCE_URL,
+        "picture_store_bytes": stats["bytes"],
+        "picture_store_ids": stats["ids"],
+    }
 
 
 @app.get("/v1/pictures/{picture_id}")
@@ -105,6 +112,7 @@ async def convert_pdf_to_page_markdown(
     file: UploadFile = File(...),
     ocr_language: str = Form("eng"),
     force_ocr: str = Form("false"),
+    include_pictures: str = Form("false"),
 ) -> dict:
     if _form_flag_is_true(force_ocr):
         raise HTTPException(
@@ -125,7 +133,15 @@ async def convert_pdf_to_page_markdown(
         if not pdf_bytes:
             raise HTTPException(status_code=400, detail="empty file")
         flight.handed_off = True
-        return await asyncio.shield(_convert_and_release(slots, flight, pdf_bytes, ocr_language))
+        return await asyncio.shield(
+            _convert_and_release(
+                slots,
+                flight,
+                pdf_bytes,
+                ocr_language,
+                include_pictures=_form_flag_is_true(include_pictures),
+            )
+        )
     except InvalidPdf as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except UnsupportedOcrLanguage as exc:
@@ -182,6 +198,8 @@ async def _convert_and_release(
     flight: _InFlight,
     pdf_bytes: bytes,
     ocr_language: str,
+    *,
+    include_pictures: bool,
 ) -> dict:
     """Run the conversion on a thread and release ``slots`` when that thread ends."""
     loop = asyncio.get_running_loop()
@@ -191,7 +209,11 @@ async def _convert_and_release(
         error: BaseException | None = None
         result: dict | None = None
         try:
-            result = pdf_to_page_markdown(pdf_bytes, ocr_language=ocr_language)
+            result = pdf_to_page_markdown(
+                pdf_bytes,
+                ocr_language=ocr_language,
+                include_pictures=include_pictures,
+            )
         except BaseException as exc:
             error = exc
         loop.call_soon_threadsafe(_deliver_conversion, future, slots, flight, result, error)
@@ -212,6 +234,8 @@ def _deliver_conversion(
     error: BaseException | None,
 ) -> None:
     try:
+        if flight.request_done or future.done():
+            _release_result_pictures(result)
         if not future.done():
             if error is not None:
                 future.set_exception(error)
@@ -221,3 +245,14 @@ def _deliver_conversion(
     finally:
         slots.release()
         asyncio.get_running_loop().create_task(_finish_thread(flight))
+
+
+def _release_result_pictures(result: dict | None) -> None:
+    """Drop ids from a conversion the caller will not fetch."""
+    if not result:
+        return
+    picture_ids: list[str] = []
+    for item in result.get("pictures") or []:
+        if isinstance(item, dict) and item.get("id"):
+            picture_ids.append(str(item["id"]))
+    picture_store.release_many(picture_ids)

@@ -43,7 +43,7 @@ def test_non_pdf_is_rejected() -> None:
 
 
 def test_convert_returns_non_empty_pages(monkeypatch) -> None:
-    def fake_reader(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict:
+    def fake_reader(pdf_bytes: bytes, *, ocr_language: str = "eng", include_pictures: bool = False) -> dict:
         assert pdf_bytes.startswith(b"%PDF")
         assert ocr_language == "rus"
         return {
@@ -65,7 +65,7 @@ def test_health_answers_while_a_conversion_runs(monkeypatch) -> None:
     started = threading.Event()
     release = threading.Event()
 
-    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict:
+    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng", include_pictures: bool = False) -> dict:
         started.set()
         assert release.wait(5)
         return {"page_count": 1, "pages": [{"page": 1, "markdown": "ok"}]}
@@ -106,7 +106,7 @@ def test_one_conversion_runs_at_a_time(monkeypatch) -> None:
     peak = 0
     lock = threading.Lock()
 
-    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict:
+    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng", include_pictures: bool = False) -> dict:
         nonlocal current, peak
         with lock:
             current += 1
@@ -145,7 +145,7 @@ def test_a_request_past_the_queue_is_rejected(monkeypatch) -> None:
     calls = 0
     calls_lock = threading.Lock()
 
-    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict:
+    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng", include_pictures: bool = False) -> dict:
         nonlocal calls
         with calls_lock:
             calls += 1
@@ -196,7 +196,7 @@ def test_cancelled_request_keeps_the_slot_until_the_thread_finishes(monkeypatch)
     lock = threading.Lock()
     release = threading.Event()
 
-    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict:
+    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng", include_pictures: bool = False) -> dict:
         nonlocal current, peak
         with lock:
             current += 1
@@ -251,7 +251,7 @@ def test_cancelled_conversion_still_fills_the_queue(monkeypatch) -> None:
     calls_lock = threading.Lock()
     release = threading.Event()
 
-    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng") -> dict:
+    def slow(pdf_bytes: bytes, *, ocr_language: str = "eng", include_pictures: bool = False) -> dict:
         nonlocal calls
         with calls_lock:
             calls += 1

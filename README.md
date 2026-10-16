@@ -10,9 +10,11 @@ This program is free software under the GNU Affero General Public License versio
 
 `GET /health`
 
-`POST /v1/convert` with multipart field `file` (a PDF). Optional form field `ocr_language` (default `eng`). Any language in the image is accepted, including codes such as `rus`, `deu`, `chi_sim`, or a combination such as `eng+rus`.
+`POST /v1/convert` with multipart field `file` (a PDF). Optional form field `ocr_language` (default `eng`). Any language in the image is accepted, including codes such as `rus`, `deu`, `chi_sim`, or a combination such as `eng+rus`. Optional form field `include_pictures` (default `false`). Text-only clients leave it false. Picture bytes are cut only when it is true, in the same PDF open as the text.
 
-`page` is 1-based. Empty pages are omitted. `force_ocr=true` is rejected. Embedded pictures are cut in the same read. Their bytes are not in the JSON. Fetch each one with `GET /v1/pictures/{id}` (`image/png`). A picture is skipped before decode when its compressed stream is over 8 MiB, its pixel size would exceed the 64 MiB budget, or that size cannot be measured. At most 80 pictures are kept. The in-memory store for all PDFs together stays within 64 MiB (`MAX_PICTURE_STORE_BYTES`). A fetched picture is removed. Unfetched pictures expire after ten minutes. `PICTURE_EXTRACT_TIMEOUT_SECONDS` (default 20) stops the cut between pictures. It does not interrupt one picture that has already started decoding.
+`page` is 1-based. Empty pages are omitted. `force_ocr=true` is rejected. Picture bytes are not in the JSON. Fetch each listed id with `GET /v1/pictures/{id}` (`image/png`). Each occurrence has its own id, including a logo repeated on another page. Ids are transient and exist only in this process. Run one instance unless a shared store is added on purpose. A fetched id is removed. Unfetched ids expire after ten minutes.
+
+The picture list is embedded raster images only. It does not include vector drawings, diagrams inferred from page layout, or a rendered scan page. Rasters under 100 pixels on a side are ignored and are not counted as omissions. A raster is skipped before decode when its compressed stream is over 8 MiB, that length cannot be measured, or its pixel size would exceed the 64 MiB decode budget. At most 80 pictures are listed. The in-memory store for all PDFs together stays within 64 MiB (`MAX_PICTURE_STORE_BYTES`). A picture that does not fit is omitted with reason `storage`. `PICTURE_EXTRACT_TIMEOUT_SECONDS` (default 20) stops the cut between pictures. It does not interrupt one picture that has already started decoding. `picture_report.reasons` counts omissions as `time`, `count`, `encoded_size`, `decoded_size`, `unreadable`, or `storage`. `truncated` is true when any eligible embedded raster was omitted. `GET /health` includes `picture_store_bytes` and `picture_store_ids`.
 
 ```json
 {
@@ -22,11 +24,24 @@ This program is free software under the GNU Affero General Public License versio
   ],
   "pictures": [
     {"id": "picture-id", "page": 1, "index_on_page": 0, "width": 800, "height": 600}
-  ]
+  ],
+  "picture_report": {
+    "scope": "embedded_raster",
+    "requested": true,
+    "truncated": false,
+    "listed": 1,
+    "skipped": 0,
+    "reasons": {
+      "time": 0,
+      "count": 0,
+      "encoded_size": 0,
+      "decoded_size": 0,
+      "unreadable": 0,
+      "storage": 0
+    }
+  }
 }
 ```
-
-`page` is 1-based. Empty pages are omitted. `force_ocr=true` is rejected.
 
 The image contains the full Tesseract fast language set. `TESSDATA_PREFIX` inside the container is `/usr/share/tessdata`. `MAX_CONCURRENT_CONVERTS` (default `1`) limits how many PDFs are converted at once. A slot stays taken until that conversion thread finishes, even if the caller disconnects. That disconnected conversion keeps its queue place until the thread finishes. `MAX_QUEUED_CONVERTS` (default `1`) limits how many may wait. A further upload gets `429`. `GET /health` keeps answering during a conversion.
 
