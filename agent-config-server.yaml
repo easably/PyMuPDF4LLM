@@ -1,0 +1,35 @@
+project:
+  name: doc2graph
+  type: BACKEND
+
+agents:
+  supervisor: AUTO
+  executor: Cursor
+
+communication:
+  file: plans/problems/long-pdf-vector-drawings-dropped.md
+  poll_interval_seconds: 120
+
+workflow:
+  automatic_review: true
+  max_review_rounds: 3
+
+finalization:
+  mode: SERVER_DEPLOY
+  trigger: ON_APPROVAL
+  environment: production
+
+  git:
+    auto_commit: true
+    auto_push: true
+    branch: current
+
+  verification:
+    wait_for_ci: true
+    wait_for_deployment: true
+    smoke_tests: true
+    integration_tests: true
+
+permissions:
+  allow_staging_deploy: true
+  allow_production_deploy: false
