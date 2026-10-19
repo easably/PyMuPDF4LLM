@@ -47,6 +47,14 @@ Record the selection rule in the README, not only the page list.
   `picture text` (for example `Pivot joystick left` on page 85).
 - `legend_lines`: on pages 68 and 205, legend lines that must stay separate.
 
+One figure ID (`TX…—UN—…`) defines one drawing. Regions with different
+figure IDs or different captions are labeled separately, even when they
+share a column. Repeated horizontal and vertical renderings of the same ID
+around one figure do not create a second drawing.
+
+A drawing box contains graphics and callout numbers. Captions, legends, and
+figure IDs stay outside it.
+
 Matching is one-to-one. A returned box can match at most one labeled
 drawing, and a labeled drawing at most one returned box, when IoU ≥ a
 configurable threshold (start 0.5). Pair by highest IoU first. Unmatched

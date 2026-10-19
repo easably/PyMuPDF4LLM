@@ -38,6 +38,37 @@ def test_skips_empty_pages_and_keeps_scan_text(monkeypatch) -> None:
     ]
 
 
+def test_picture_text_repair_is_opt_in(monkeypatch) -> None:
+    def fake_to_markdown(*_args, **_kwargs):
+        return [{"metadata": {"page_number": 1}, "text": "broken"}]
+
+    calls = 0
+
+    def fake_repair(_page, chunk):
+        nonlocal calls
+        calls += 1
+        assert chunk["text"] == "broken"
+        return "repaired"
+
+    monkeypatch.setattr(
+        "pymupdf4llm_service.pdf_to_page_markdown.pymupdf4llm.to_markdown",
+        fake_to_markdown,
+    )
+    monkeypatch.setattr(
+        "pymupdf4llm_service.pdf_to_page_markdown._repair_picture_text",
+        fake_repair,
+    )
+    payload = text_layer_pdf("Service points")
+
+    unchanged = pdf_to_page_markdown(payload)
+    assert unchanged["pages"][0]["markdown"] == "broken"
+    assert calls == 0
+
+    repaired = pdf_to_page_markdown(payload, repair_picture_text=True)
+    assert repaired["pages"][0]["markdown"] == "repaired"
+    assert calls == 1
+
+
 def test_bad_language_is_rejected() -> None:
     with pytest.raises(UnsupportedOcrLanguage):
         pdf_to_page_markdown(text_layer_pdf("Service points"), ocr_language="english")

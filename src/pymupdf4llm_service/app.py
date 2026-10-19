@@ -29,7 +29,7 @@ if _CONVERT_LIMIT < 1:
 if _QUEUE_LIMIT < 0:
     raise RuntimeError("MAX_QUEUED_CONVERTS must be at least 0")
 
-app = FastAPI(title="PyMuPDF4LLM text service", version="0.3.0")
+app = FastAPI(title="PyMuPDF4LLM text service", version="0.4.0")
 
 
 class _InFlight:
@@ -113,6 +113,7 @@ async def convert_pdf_to_page_markdown(
     ocr_language: str = Form("eng"),
     force_ocr: str = Form("false"),
     include_pictures: str = Form("false"),
+    repair_picture_text: str = Form("false"),
 ) -> dict:
     if _form_flag_is_true(force_ocr):
         raise HTTPException(
@@ -140,6 +141,7 @@ async def convert_pdf_to_page_markdown(
                 pdf_bytes,
                 ocr_language,
                 include_pictures=_form_flag_is_true(include_pictures),
+                repair_picture_text=_form_flag_is_true(repair_picture_text),
             )
         )
     except InvalidPdf as exc:
@@ -200,6 +202,7 @@ async def _convert_and_release(
     ocr_language: str,
     *,
     include_pictures: bool,
+    repair_picture_text: bool,
 ) -> dict:
     """Run the conversion on a thread and release ``slots`` when that thread ends."""
     loop = asyncio.get_running_loop()
@@ -209,11 +212,13 @@ async def _convert_and_release(
         error: BaseException | None = None
         result: dict | None = None
         try:
-            result = pdf_to_page_markdown(
-                pdf_bytes,
-                ocr_language=ocr_language,
-                include_pictures=include_pictures,
-            )
+            kwargs = {
+                "ocr_language": ocr_language,
+                "include_pictures": include_pictures,
+            }
+            if repair_picture_text:
+                kwargs["repair_picture_text"] = True
+            result = pdf_to_page_markdown(pdf_bytes, **kwargs)
         except BaseException as exc:
             error = exc
         loop.call_soon_threadsafe(_deliver_conversion, future, slots, flight, result, error)

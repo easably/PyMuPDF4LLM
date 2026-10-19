@@ -1,0 +1,622 @@
+{
+  "schema_version": 1,
+  "pdf": {
+    "file_name": "compact track loader.pdf",
+    "sha256": "ef29c72b6659a61f2d7905ffcbe7ec03375e45ae37c84a801a44f3940edcdf14",
+    "page_count": 220
+  },
+  "matching": {
+    "strategy": "greedy_descending_iou",
+    "iou_threshold": 0.5,
+    "duplicates_are_false_pictures": true
+  },
+  "reference_pages": [8, 13, 19, 68, 85, 135, 181, 205],
+  "pages": [
+    {
+      "page": 2,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "text", "bbox": [68, 80, 587, 330]}],
+      "text_phrases": ["Introduction"],
+      "legend_lines": []
+    },
+    {
+      "page": 3,
+      "group": "mixed",
+      "drawings": [
+        {"id": "p003-pin-location", "label": "PIN plate location photograph", "source": "raster", "bbox": [333, 109, 560, 246]},
+        {"id": "p003-pin-plate", "label": "example PIN plate", "source": "vector", "bbox": [333, 255, 560, 391]}
+      ],
+      "not_pictures": [
+        {"type": "caption", "bbox": [416, 397, 493, 405]},
+        {"type": "legend", "bbox": [341, 422, 537, 429]}
+      ],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 4,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [49, 132, 524, 269]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 8,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p008-ce", "label": "European Union CE mark", "source": "vector", "bbox": [308, 105, 396, 168]},
+        {"id": "p008-eac", "label": "Eurasian Economic Union EAC mark", "source": "vector", "bbox": [436, 98, 512, 174]}
+      ],
+      "not_pictures": [
+        {"type": "figure_id", "bbox": [293, 87, 489, 92]},
+        {"type": "caption", "bbox": [314, 182, 531, 190]}
+      ],
+      "text_phrases": ["Conformity Marking for European Union"],
+      "legend_lines": []
+    },
+    {
+      "page": 9,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [82, 299, 570, 539]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 10,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "text", "bbox": [25, 80, 545, 680]}],
+      "text_phrases": ["Warranted Parts"],
+      "legend_lines": []
+    },
+    {
+      "page": 13,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "form", "bbox": [68, 80, 587, 641]}],
+      "text_phrases": ["Technical Information Feedback Form"],
+      "legend_lines": []
+    },
+    {
+      "page": 15,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [
+        {"type": "table", "bbox": [79, 147, 300, 601]},
+        {"type": "table", "bbox": [333, 121, 553, 606]}
+      ],
+      "text_phrases": ["Contents"],
+      "legend_lines": []
+    },
+    {
+      "page": 16,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [
+        {"type": "table", "bbox": [38, 110, 258, 711]},
+        {"type": "table", "bbox": [292, 92, 512, 707]}
+      ],
+      "text_phrases": ["Contents"],
+      "legend_lines": []
+    },
+    {
+      "page": 17,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [
+        {"type": "table", "bbox": [79, 92, 300, 728]},
+        {"type": "table", "bbox": [333, 92, 553, 550]}
+      ],
+      "text_phrases": ["Maintenance—Every 10 Hours or Daily"],
+      "legend_lines": []
+    },
+    {
+      "page": 18,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "text", "bbox": [68, 80, 587, 150]}],
+      "text_phrases": ["Contents"],
+      "legend_lines": []
+    },
+    {
+      "page": 19,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p019-loader", "label": "loader safety and operator convenience overview", "source": "vector", "bbox": [194, 105, 464, 378]}
+      ],
+      "not_pictures": [{"type": "frame", "bbox": [68, 82, 587, 629]}],
+      "text_phrases": ["Please remember that the operator is the key"],
+      "legend_lines": []
+    },
+    {
+      "page": 30,
+      "group": "mixed",
+      "drawings": [
+        {"id": "p030-electrical-lines", "label": "contact with electrical lines", "source": "raster", "bbox": [299, 85, 525, 198]},
+        {"id": "p030-solid-footing", "label": "operate on solid footing", "source": "vector", "bbox": [290, 208, 519, 345]},
+        {"id": "p030-riders", "label": "keep riders off machine", "source": "raster", "bbox": [299, 464, 525, 577]}
+      ],
+      "not_pictures": [],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 38,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p038-loader", "label": "loader safety signs left side", "source": "vector", "bbox": [120, 88, 470, 360]}
+      ],
+      "not_pictures": [
+        {"type": "frame", "bbox": [25, 82, 545, 480]},
+        {"type": "legend", "bbox": [37, 360, 542, 477]}
+      ],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 39,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p039-loader", "label": "loader safety signs right side", "source": "vector", "bbox": [145, 94, 515, 365]},
+        {"id": "p039-tiedown", "label": "tiedown point symbol", "source": "vector", "bbox": [394, 451, 544, 601]}
+      ],
+      "not_pictures": [
+        {"type": "frame", "bbox": [68, 81, 587, 431]},
+        {"type": "frame", "bbox": [68, 440, 587, 614]}
+      ],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 48,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p048-switch", "label": "self leveling and ride control switch", "source": "vector", "bbox": [366, 101, 458, 182]}
+      ],
+      "not_pictures": [{"type": "frame", "bbox": [25, 81, 545, 489]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 53,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p053-gauges", "label": "gauges and indicators", "source": "vector", "bbox": [80, 125, 570, 418]}
+      ],
+      "not_pictures": [
+        {"type": "figure_id", "bbox": [577, 247, 582, 323]},
+        {"type": "frame", "bbox": [68, 81, 587, 742]}
+      ],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 68,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p068-radio", "label": "radio controls diagram", "source": "vector", "bbox": [293, 97, 519, 323]}
+      ],
+      "not_pictures": [
+        {"type": "legend", "bbox": [299, 342, 533, 459]},
+        {"type": "frame", "bbox": [25, 81, 545, 742]}
+      ],
+      "text_phrases": ["Power—Press power button (1) to turn radio on or off."],
+      "legend_lines": [
+        "1— Power Button",
+        "2— Mute Button",
+        "3— Display Button",
+        "4— AM/FM Button",
+        "5— Auxiliary Button",
+        "6— Weather Band Button",
+        "7— Timer Button",
+        "8— Audio and Menu Adjustment Button",
+        "9— Increase Volume Button",
+        "10— Decrease Volume Button",
+        "11— Increase Manual Tune Frequency Button",
+        "12— Decrease Manual Tune Frequency Button",
+        "13— Decrease Automatic Tune Frequency Button",
+        "14— Increase Automatic Tune Frequency Button",
+        "15— Auxiliary Audio Input Jack",
+        "16— Preset Button 1",
+        "17— Preset Button 2",
+        "18— Preset Button 3",
+        "19— Preset Button 4",
+        "20— Preset Button 5",
+        "21— Preset Button 6"
+      ]
+    },
+    {
+      "page": 70,
+      "group": "mixed",
+      "drawings": [
+        {"id": "p070-manual", "label": "reading operator manual", "source": "raster", "bbox": [299, 85, 525, 186]},
+        {"id": "p070-inspection", "label": "machine inspection diagram", "source": "vector", "bbox": [301, 255, 539, 524]}
+      ],
+      "not_pictures": [{"type": "legend", "bbox": [299, 555, 486, 579]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 74,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p074-warning", "label": "warning indicator", "source": "vector", "bbox": [380, 101, 447, 168]},
+        {"id": "p074-stop", "label": "engine stop indicator", "source": "vector", "bbox": [379, 227, 446, 293]},
+        {"id": "p074-emission-warning", "label": "emissions malfunction and warning indicators", "source": "vector", "bbox": [330, 349, 494, 415]},
+        {"id": "p074-emission-stop-60", "label": "emissions malfunction and engine stop indicators, 60 minutes", "source": "vector", "bbox": [335, 491, 487, 558]},
+        {"id": "p074-emission-stop-2", "label": "emissions malfunction and engine stop indicators, 2 minutes", "source": "vector", "bbox": [335, 626, 487, 693]}
+      ],
+      "not_pictures": [
+        {"type": "figure_id", "bbox": [37, 93, 362, 114]},
+        {"type": "caption", "bbox": [374, 297, 450, 305]},
+        {"type": "caption", "bbox": [300, 698, 524, 706]}
+      ],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 82,
+      "group": "mixed",
+      "drawings": [
+        {"id": "p082-steering", "label": "left joystick steering controls", "source": "vector", "bbox": [290, 87, 530, 225]},
+        {"id": "p082-boom-cab", "label": "right joystick boom controls", "source": "vector", "bbox": [290, 292, 530, 435]},
+        {"id": "p082-boom-pattern", "label": "right joystick ISO operation pattern", "source": "vector", "bbox": [290, 450, 530, 675]}
+      ],
+      "not_pictures": [
+        {"type": "decorative_icon", "bbox": [37, 115, 54, 130]},
+        {"type": "frame", "bbox": [25, 81, 545, 700]}
+      ],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 83,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p083-controls", "label": "left joystick controls", "source": "vector", "bbox": [340, 87, 550, 218]},
+        {"id": "p083-pattern", "label": "left joystick H-pattern operation", "source": "vector", "bbox": [350, 235, 550, 450]}
+      ],
+      "not_pictures": [{"type": "frame", "bbox": [68, 81, 587, 488]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 84,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p084-controls", "label": "right joystick controls", "source": "vector", "bbox": [290, 87, 530, 218]},
+        {"id": "p084-pattern", "label": "right joystick ISO operation pattern", "source": "vector", "bbox": [290, 235, 530, 450]}
+      ],
+      "not_pictures": [{"type": "frame", "bbox": [25, 81, 545, 488]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 85,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p085-controls", "label": "right joystick controls", "source": "vector", "bbox": [340, 87, 550, 218]},
+        {"id": "p085-pattern", "label": "right joystick H-pattern operation", "source": "vector", "bbox": [350, 235, 550, 450]}
+      ],
+      "not_pictures": [{"type": "frame", "bbox": [68, 81, 587, 488]}],
+      "text_phrases": [
+        "The right joystick (1) controls the bucket:",
+        "Pivot joystick left to roll back bucket.",
+        "Pivot joystick right to dump bucket."
+      ],
+      "legend_lines": []
+    },
+    {
+      "page": 97,
+      "group": "mixed",
+      "drawings": [
+        {"id": "p097-switch", "label": "self leveling and ride control switch", "source": "vector", "bbox": [408, 95, 501, 176]},
+        {"id": "p097-joystick", "label": "right joystick ride control", "source": "vector", "bbox": [344, 179, 560, 330]},
+        {"id": "p097-module", "label": "sealed switch module", "source": "raster", "bbox": [333, 414, 561, 642]}
+      ],
+      "not_pictures": [{"type": "decorative_icon", "bbox": [80, 115, 97, 130]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 99,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p099-gauges", "label": "engagement and monitor unit gauges", "source": "vector", "bbox": [90, 166, 570, 253]}
+      ],
+      "not_pictures": [{"type": "figure_id", "bbox": [577, 246, 582, 323]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 100,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p100-display", "label": "engagement and monitor unit display", "source": "vector", "bbox": [361, 126, 539, 243]}
+      ],
+      "not_pictures": [{"type": "table", "bbox": [40, 268, 531, 434]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 103,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [
+        {"type": "table", "bbox": [82, 144, 573, 219]},
+        {"type": "table", "bbox": [82, 298, 446, 384]},
+        {"type": "table", "bbox": [82, 465, 501, 514]}
+      ],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 105,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [82, 270, 585, 377]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 108,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p108-slope", "label": "constant operation across a slope", "source": "vector", "bbox": [354, 84, 519, 222]},
+        {"id": "p108-one-track", "label": "one track on slope", "source": "vector", "bbox": [354, 245, 519, 357]},
+        {"id": "p108-jagged", "label": "jagged surface", "source": "vector", "bbox": [354, 380, 519, 529]}
+      ],
+      "not_pictures": [{"type": "frame", "bbox": [25, 81, 545, 605]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 120,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p120-temperature", "label": "oil viscosities for air temperature ranges", "source": "vector", "bbox": [329, 282, 539, 513]}
+      ],
+      "not_pictures": [{"type": "caption", "bbox": [339, 518, 485, 526]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 121,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [336, 257, 533, 287]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 122,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [50, 271, 262, 364]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 123,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [
+        {"type": "table", "bbox": [82, 236, 240, 292]},
+        {"type": "table", "bbox": [362, 165, 558, 258]}
+      ],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 126,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p126-viscosity", "label": "hydraulic oil viscosity temperature ranges", "source": "vector", "bbox": [134, 102, 433, 482]}
+      ],
+      "not_pictures": [{"type": "figure_id", "bbox": [534, 306, 539, 381]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 130,
+      "group": "mixed",
+      "drawings": [
+        {"id": "p130-chart-location", "label": "periodic maintenance chart location", "source": "raster", "bbox": [291, 85, 518, 221]},
+        {"id": "p130-hour-meter", "label": "hour meter display", "source": "vector", "bbox": [361, 279, 539, 397]}
+      ],
+      "not_pictures": [{"type": "decorative_icon", "bbox": [37, 500, 55, 516]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 135,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [79, 184, 551, 663]}],
+      "text_phrases": ["Service Intervals"],
+      "legend_lines": []
+    },
+    {
+      "page": 136,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [40, 106, 524, 440]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 145,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p145-lubrication", "label": "boom linkage lubrication points", "source": "vector", "bbox": [175, 105, 505, 383]}
+      ],
+      "not_pictures": [{"type": "frame", "bbox": [68, 81, 587, 471]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 175,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p175-fuse-block", "label": "fuse block", "source": "vector", "bbox": [105, 307, 575, 634]}
+      ],
+      "not_pictures": [{"type": "table", "bbox": [79, 87, 541, 224]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 177,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p177-bolt-heads", "label": "SAE bolt head grade marks", "source": "vector", "bbox": [142, 114, 541, 150]},
+        {"id": "p177-fastener", "label": "thread lubrication fastener diagram", "source": "vector", "bbox": [193, 525, 458, 586]}
+      ],
+      "not_pictures": [{"type": "table", "bbox": [85, 167, 573, 417]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 178,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p178-bolt-heads", "label": "metric bolt head class marks", "source": "vector", "bbox": [68, 109, 510, 188]},
+        {"id": "p178-fastener", "label": "thread lubrication fastener diagram", "source": "vector", "bbox": [151, 544, 416, 605]}
+      ],
+      "not_pictures": [{"type": "table", "bbox": [40, 133, 531, 467]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 179,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [82, 247, 585, 683]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 181,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p181-display", "label": "EMU display and buttons", "source": "vector", "bbox": [251, 85, 505, 223]},
+        {"id": "p181-indicators", "label": "EMU gauges and indicator symbols", "source": "vector", "bbox": [202, 350, 505, 477]}
+      ],
+      "not_pictures": [{"type": "frame", "bbox": [68, 81, 587, 720]}],
+      "text_phrases": [
+        "Sit in operator's seat.",
+        "Do all EMU display segments turn on",
+        "Fuel Gauge",
+        "Hydraulic High Flow Indicator"
+      ],
+      "legend_lines": []
+    },
+    {
+      "page": 182,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p182-work-light", "label": "work light switch", "source": "vector", "bbox": [160, 416, 218, 492]}
+      ],
+      "not_pictures": [{"type": "table", "bbox": [25, 81, 545, 666]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 183,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p183-flasher", "label": "dual flasher light switch", "source": "vector", "bbox": [204, 87, 258, 172]},
+        {"id": "p183-wiper", "label": "windshield wiper and washer switch", "source": "vector", "bbox": [204, 307, 258, 394]}
+      ],
+      "not_pictures": [{"type": "table", "bbox": [68, 81, 587, 489]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 184,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p184-wiper", "label": "windshield wiper and washer switch", "source": "vector", "bbox": [160, 88, 218, 172]},
+        {"id": "p184-dial", "label": "engine speed control dial", "source": "vector", "bbox": [150, 376, 250, 478]}
+      ],
+      "not_pictures": [{"type": "table", "bbox": [25, 81, 545, 687]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 185,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [82, 87, 585, 554]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 191,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [82, 87, 585, 430]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 192,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [40, 87, 542, 430]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 193,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "form", "bbox": [79, 84, 585, 477]}],
+      "text_phrases": ["Bucket Dump Drift Check"],
+      "legend_lines": []
+    },
+    {
+      "page": 194,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [40, 87, 542, 633]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 205,
+      "group": "vector_only",
+      "drawings": [
+        {"id": "p205-dimensions", "label": "machine dimensions side and top views", "source": "vector", "bbox": [80, 106, 543, 327]}
+      ],
+      "not_pictures": [{"type": "table", "bbox": [79, 333, 582, 710]}],
+      "text_phrases": ["317G Machine Dimensions", "2—Hinge Pin"],
+      "legend_lines": [
+        "1—Dump (full lift height)",
+        "2—Hinge Pin",
+        "3—Dump With Foundry Bucket",
+        "3—Dump With Construction Bucket",
+        "4—Bucket Rollback (ground level)",
+        "5—Dump With Foundry Bucket",
+        "5—Dump With Construction Bucket",
+        "6—Ground Clearance",
+        "7—Overall Without Bucket",
+        "8—Overall With Foundry Bucket"
+      ]
+    },
+    {
+      "page": 208,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [
+        {"type": "table", "bbox": [37, 107, 417, 251]},
+        {"type": "table", "bbox": [66, 301, 254, 371]},
+        {"type": "table", "bbox": [40, 422, 514, 496]}
+      ],
+      "text_phrases": [],
+      "legend_lines": []
+    }
+  ]
+}

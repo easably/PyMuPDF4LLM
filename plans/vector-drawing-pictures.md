@@ -26,19 +26,25 @@ IDs. No whole-page renders. No figure context (step 4).
 ## Detection
 
 1. Refined boxes from the step 2 module.
-2. Merge nearby accepted boxes with no text block between them (page 8).
-3. Fallback: when much non-frame vector content is not covered by any
+2. Split a candidate that contains multiple figure IDs or multiple
+   captions into one candidate per identified figure. Pages 82–85 each
+   contain separately identified cockpit and operation-pattern drawings.
+3. Merge nearby accepted boxes only when they are fragments of the same
+   figure. Never merge across different figure IDs (`TX…—UN—…`) or
+   different captions. Page 8 is two figures, CE and EAC; pieces within
+   either sign may merge, but the two signs must stay separate.
+4. Fallback: when much non-frame vector content is not covered by any
    accepted box or raster, run `page.cluster_drawings()` on the uncovered
    paths.
    - Frame paths are excluded from clustering input only.
    - Reject clusters that substantially overlap a ruled table from
      `page.find_tables()`. Do not trust the layout `table` class (page 205).
    - Reject too small, too few paths, or frame-sized clusters.
-4. Section frames are a hint, not a rule. A candidate that crosses a frame
+5. Section frames are a hint, not a rule. A candidate that crosses a frame
    border gets a lower score or is split at the border only when the parts
    on each side contain vector content. It is never rejected for crossing
    alone.
-5. Render: small margin, clip to page,
+6. Render: small margin, clip to page,
    `page.get_pixmap(clip=box, dpi=150, alpha=False)`, store in
    `PictureStore`.
 
@@ -70,7 +76,9 @@ Generated PDFs with injected candidate boxes:
 - embedded raster unchanged;
 - raster and drawing on one page → both, stable order;
 - raster inside a candidate → no vector duplicate;
+- one candidate with two figure IDs → two pictures;
 - fragments merged;
+- adjacent drawings with different figure IDs or captions stay separate;
 - framed section → drawing found, frame not; dimension lines kept;
 - uncovered drawing → found by fallback;
 - ruled table → not returned;

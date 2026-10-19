@@ -21,6 +21,7 @@ from pymupdf4llm_service.pictures import (
     empty_picture_report,
     picture_store,
 )
+from pymupdf4llm_service.text_repair import repair_picture_text as _repair_picture_text
 
 # Tesseract codes, including chi_sim and script/Latin. Several may be joined with +.
 _LANGUAGE_PART = re.compile(r"(?:[A-Za-z][A-Za-z0-9_]*|script/[A-Za-z][A-Za-z0-9_]*)")
@@ -43,6 +44,7 @@ def pdf_to_page_markdown(
     *,
     ocr_language: str = "eng",
     include_pictures: bool = False,
+    repair_picture_text: bool = False,
 ) -> dict[str, Any]:
     """Return ``page_count`` and ``pages`` of ``{page, markdown}``.
 
@@ -66,6 +68,13 @@ def pdf_to_page_markdown(
             chunks = _markdown_chunks(document, language)
             if not isinstance(chunks, list):
                 raise RuntimeError("PyMuPDF4LLM did not return one chunk per page")
+            if repair_picture_text:
+                for chunk in chunks:
+                    page_number = _page_number(chunk)
+                    if page_number is not None:
+                        chunk["text"] = _repair_picture_text(
+                            document[page_number - 1], chunk
+                        )
             if include_pictures:
                 cut = cut_embedded_pictures(document)
                 pictures = cut["pictures"]

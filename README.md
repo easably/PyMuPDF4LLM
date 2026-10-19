@@ -12,6 +12,12 @@ This program is free software under the GNU Affero General Public License versio
 
 `POST /v1/convert` with multipart field `file` (a PDF). Optional form field `ocr_language` (default `eng`). Any language in the image is accepted, including codes such as `rus`, `deu`, `chi_sim`, or a combination such as `eng+rus`. Optional form field `include_pictures` (default `false`). Text-only clients leave it false. Picture bytes are cut only when it is true, in the same PDF open as the text.
 
+Optional form field `repair_picture_text` is also `false` by default. When
+enabled, it restores text that page layout incorrectly put inside
+`picture text` blocks. Raster-picture text is left unchanged. This is an
+opt-in feature: in multi-column procedures, restored side-column answers may
+follow the main column instead of appearing beside their related question.
+
 `page` is 1-based. Empty pages are omitted. `force_ocr=true` is rejected. Picture bytes are not in the JSON. Fetch each listed id with `GET /v1/pictures/{id}` (`image/png`). Each occurrence has its own id, including a logo repeated on another page. Ids are transient and exist only in this process. Run one instance unless a shared store is added on purpose. A fetched id is removed. Unfetched ids expire after ten minutes.
 
 The picture list is embedded raster images only. It does not include vector drawings, diagrams inferred from page layout, or a rendered scan page. Rasters under 100 pixels on a side are ignored and are not counted as omissions. A raster is skipped before decode when its compressed stream is over 8 MiB, that length cannot be measured, or its pixel size would exceed the 64 MiB decode budget. At most 80 pictures are listed. The in-memory store for all PDFs together stays within 64 MiB (`MAX_PICTURE_STORE_BYTES`). A picture that does not fit is omitted with reason `storage`. `PICTURE_EXTRACT_TIMEOUT_SECONDS` (default 20) stops the cut between pictures. It does not interrupt one picture that has already started decoding. `picture_report.reasons` counts omissions as `time`, `count`, `encoded_size`, `decoded_size`, `unreadable`, or `storage`. `truncated` is true when any eligible embedded raster was omitted. `GET /health` includes `picture_store_bytes` and `picture_store_ids`.

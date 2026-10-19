@@ -61,6 +61,29 @@ def test_convert_returns_non_empty_pages(monkeypatch) -> None:
     assert response.json()["pages"] == [{"page": 1, "markdown": "Pump oil"}]
 
 
+def test_picture_text_repair_flag_is_forwarded(monkeypatch) -> None:
+    def fake_reader(
+        pdf_bytes: bytes,
+        *,
+        ocr_language: str = "eng",
+        include_pictures: bool = False,
+        repair_picture_text: bool = False,
+    ) -> dict:
+        assert pdf_bytes.startswith(b"%PDF")
+        assert repair_picture_text is True
+        return {"page_count": 1, "pages": [{"page": 1, "markdown": "repaired"}]}
+
+    monkeypatch.setattr("pymupdf4llm_service.app.pdf_to_page_markdown", fake_reader)
+    response = TestClient(app).post(
+        "/v1/convert",
+        files={"file": ("manual.pdf", b"%PDF-1.4 fake", "application/pdf")},
+        data={"repair_picture_text": "true"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["pages"][0]["markdown"] == "repaired"
+
+
 def test_health_answers_while_a_conversion_runs(monkeypatch) -> None:
     started = threading.Event()
     release = threading.Event()

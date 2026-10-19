@@ -12,6 +12,10 @@ corpus from `plans/acceptance-compact-track-loader.md`.
 This plan delivers a prototype and a review. It does not change the
 service response.
 
+Status (19 October 2026): prototype approved after full dry-runs on the
+220-page compact loader and 530-page CAT manuals. Integrated in service
+version 0.4.0 behind `repair_picture_text`, off by default.
+
 ## Part A. Box refinement module
 
 New module, for example `src/pymupdf4llm_service/picture_boxes.py`.
@@ -88,3 +92,7 @@ If integrated, doc2graph re-indexes affected documents after the release.
 - Part A tests pass.
 - The analysis file is written.
 - A person has made the integration decision.
+
+Decision: integrate without narrowing, behind a default-off setting. Enable
+first on a doc2graph staging run; production enablement and re-indexing are
+not part of this plan.
