@@ -40,6 +40,7 @@ LIVE_SERVICE_HOSTS = {"pymupdf4llm"}
 # Same defaults as pymupdf4llm_service.pictures. Inventory uses these static
 # checks. The running service may stop earlier on time, count, or memory.
 MIN_SIDE = 100
+MIN_DISPLAY_SIDE_PT = 40.0
 MAX_RASTER_PICTURES = 80
 MAX_VECTOR_PICTURES = 120
 MAX_STREAM_BYTES = 8 * 1024 * 1024
@@ -78,7 +79,14 @@ class Inventory:
     occurrences: list[Occurrence]
 
     def counts(self) -> dict[str, int]:
-        filters = {"mask": 0, "min_side": 0, "encoded_size": 0, "decoded_size": 0, "eligible": 0}
+        filters = {
+            "mask": 0,
+            "min_side": 0,
+            "too_small_displayed": 0,
+            "encoded_size": 0,
+            "decoded_size": 0,
+            "eligible": 0,
+        }
         pages_with_images: set[int] = set()
         for item in self.occurrences:
             pages_with_images.add(item.page)
@@ -239,6 +247,8 @@ def inventory_document(document: pymupdf.Document) -> Inventory:
                 static_filter = "mask"
             elif width < MIN_SIDE or height < MIN_SIDE:
                 static_filter = "min_side"
+            elif _displayed_too_small(page, xref):
+                static_filter = "too_small_displayed"
             else:
                 stream_bytes = _stream_length(document, xref)
                 if stream_bytes is None or stream_bytes > MAX_STREAM_BYTES:
@@ -258,14 +268,27 @@ def inventory_document(document: pymupdf.Document) -> Inventory:
     return Inventory(page_count=document.page_count, occurrences=occurrences)
 
 
+def _displayed_too_small(page: pymupdf.Page, xref: int) -> bool:
+    rects = page.get_image_rects(xref)
+    if not rects:
+        return False
+    return all(min(rect.width, rect.height) < MIN_DISPLAY_SIDE_PT for rect in rects)
+
+
 def _stream_length(document: pymupdf.Document, xref: int) -> int | None:
     kind, value = document.xref_get_key(xref, "Length")
-    if kind != "int":
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        return None
+    if kind == "int":
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    if kind == "xref":
+        try:
+            length_xref = int(value.split()[0])
+            return int(document.xref_object(length_xref).strip())
+        except (ValueError, IndexError):
+            return None
+    return None
 
 
 def png_ihdr(png: bytes) -> tuple[int, int, int, int] | None:
@@ -553,6 +576,7 @@ def render_report(result: RunResult) -> str:
         f"- PICTURE_EXTRACT_TIMEOUT_SECONDS: {PICTURE_TIMEOUT_SECONDS}",
         f"- VECTOR_DETECTION_TIMEOUT_SECONDS: {VECTOR_TIMEOUT_SECONDS}",
         f"- minimum side: {MIN_SIDE}px (masks and smaller rasters are not API omissions)",
+        f"- MIN_PICTURE_DISPLAY_SIDE_PT: {MIN_DISPLAY_SIDE_PT} (shown box; counted as too_small_displayed)",
         "",
         "## Timings",
         "",
@@ -585,6 +609,7 @@ def render_report(result: RunResult) -> str:
         f"- Xrefs that occur more than once: {counts['xrefs_repeated']}",
         f"- Rejected as mask: {counts['mask']}",
         f"- Rejected as under {MIN_SIDE}px: {counts['min_side']}",
+        f"- Rejected as shown smaller than {MIN_DISPLAY_SIDE_PT} pt: {counts['too_small_displayed']}",
         f"- Rejected for encoded size or missing Length: {counts['encoded_size']}",
         f"- Rejected for decoded pixel budget: {counts['decoded_size']}",
         f"- Eligible before the runtime stop: {counts['eligible']}",
@@ -640,9 +665,11 @@ def render_report(result: RunResult) -> str:
             f"- Vector drawings skipped: {vector_report.get('skipped', 0)}",
             f"- API truncated: {report.get('truncated')}",
             f"- Stop counters in the response: {', '.join(stop_bits) or 'none recorded'}",
+            f"- Raster listing stopped at page: {report.get('raster_cap_reached_at_page')}",
             f"- Other API reasons: encoded_size={reasons.get('encoded_size', 0)}, "
             f"decoded_size={reasons.get('decoded_size', 0)}, "
-            f"unreadable={reasons.get('unreadable', 0)}, storage={reasons.get('storage', 0)}",
+            f"unreadable={reasons.get('unreadable', 0)}, storage={reasons.get('storage', 0)}, "
+            f"too_small_displayed={reasons.get('too_small_displayed', 0)}",
             "",
             "Raster and vector count and time limits are separate. Memory pressure shows up as `storage` when the PNG store cannot keep another blob. None of those runtime stops is the eligible raster inventory count.",
             "",

@@ -54,6 +54,18 @@ def test_inventory_separates_masks_small_images_and_repeats() -> None:
     assert counts["min_side"] == 1
     assert counts["eligible"] == 2
     assert counts["mask"] == 0
+    assert counts["too_small_displayed"] == 0
+
+
+def test_inventory_rejects_a_large_raster_drawn_tiny() -> None:
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_image(pymupdf.Rect(20, 20, 38, 36), stream=_png(120, 140))
+    inventory = accept.inventory_document(document)
+    document.close()
+
+    assert inventory.counts()["too_small_displayed"] == 1
+    assert inventory.counts()["eligible"] == 0
 
 
 def test_memory_log_peak_and_png_header() -> None:

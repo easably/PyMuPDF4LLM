@@ -92,6 +92,21 @@ def test_page_edge_drawing_is_clipped() -> None:
         document.close()
 
 
+def test_fallback_fragment_is_absorbed_into_the_layout_drawing() -> None:
+    document, page = _page()
+    try:
+        page.draw_rect(pymupdf.Rect(40, 80, 70, 170), width=2)
+        page.draw_rect(pymupdf.Rect(80, 80, 280, 170), width=2)
+        page.draw_line((90, 90), (270, 160), width=2)
+
+        found = detect_vector_drawings(page, [(80, 80, 280, 170)])
+
+        assert len(found) == 1
+        assert found[0]["bbox"][0] <= 42
+    finally:
+        document.close()
+
+
 def test_tiny_line_is_ignored() -> None:
     document, page = _page()
     try:

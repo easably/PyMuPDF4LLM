@@ -10,4 +10,7 @@
 - Report counts by kind, vector detector, ID-based split/merge hints, scanned
   vector pages, and the five slowest vector pages.
 - Resolve indirect PDF image stream lengths instead of dropping those rasters.
+- Skip rasters whose shown box is under `MIN_PICTURE_DISPLAY_SIDE_PT`
+  (default 40 pt) so small CAUTION icons do not fill the raster cap.
+  `raster_cap_reached_at_page` records where the cap stopped listing.
 - Keep picture-text repair opt-in with `repair_picture_text=true`.

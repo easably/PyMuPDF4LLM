@@ -237,7 +237,7 @@ def detect_vector_drawings(
                 for raster in rasters
             ):
                 continue
-            _append_distinct(found, cluster, "fallback", config)
+            _add_or_merge(found, cluster, "fallback", config, text_spans)
 
     found.sort(key=lambda item: (item["bbox"][1], item["bbox"][0]))
     return found
@@ -396,6 +396,25 @@ def _split_on_figure_ids(
     return boxes or [refined]
 
 
+def _add_or_merge(
+    found: list[dict[str, Any]],
+    box: RectTuple,
+    detector: str,
+    settings: VectorDrawingSettings,
+    text_spans: Sequence[dict[str, Any]],
+) -> None:
+    """Absorb a leftover cluster into a nearby picture, or append it."""
+    for item in found:
+        if _intersection_share(box, item["bbox"]) >= settings.covered_path_share:
+            return
+    for item in found:
+        merged = _merge_fragments([item["bbox"], box], text_spans, settings)
+        if len(merged) == 1:
+            item["bbox"] = merged[0]
+            return
+    _append_distinct(found, box, detector, settings)
+
+
 def _append_distinct(
     found: list[dict[str, Any]],
     box: RectTuple,
@@ -405,7 +424,11 @@ def _append_distinct(
     id_split: bool = False,
     id_merged: bool = False,
 ) -> None:
-    if any(bbox_iou(item["bbox"], box) >= settings.duplicate_iou for item in found):
+    if any(
+        bbox_iou(item["bbox"], box) >= settings.duplicate_iou
+        or _intersection_share(box, item["bbox"]) >= settings.covered_path_share
+        for item in found
+    ):
         return
     found.append(
         {

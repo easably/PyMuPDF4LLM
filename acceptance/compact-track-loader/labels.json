@@ -539,7 +539,7 @@
       "group": "vector_only",
       "drawings": [
         {"id": "p184-wiper", "label": "windshield wiper and washer switch", "source": "vector", "bbox": [160, 88, 218, 172]},
-        {"id": "p184-dial", "label": "engine speed control dial", "source": "vector", "bbox": [150, 376, 250, 478]}
+        {"id": "p184-dial", "label": "engine speed control dial", "source": "vector", "bbox": [148, 376, 220, 454]}
       ],
       "not_pictures": [{"type": "table", "bbox": [25, 81, 545, 687]}],
       "text_phrases": [],

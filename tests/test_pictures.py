@@ -316,6 +316,33 @@ def test_indirect_stream_length_raster_is_returned() -> None:
     picture_store.release_many([item["id"] for item in cut["pictures"]])
 
 
+def test_tiny_displayed_raster_is_skipped() -> None:
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_image(pymupdf.Rect(20, 20, 38, 36), stream=_raster_png())
+    try:
+        cut = cut_embedded_pictures(document)
+    finally:
+        document.close()
+
+    assert cut["pictures"] == []
+    assert cut["report"]["reasons"]["too_small_displayed"] == 1
+    assert cut["report"]["truncated"] is True
+
+
+def test_raster_cap_records_the_page_where_listing_stops(monkeypatch) -> None:
+    monkeypatch.setenv("MAX_RASTER_PICTURES", "1")
+    document = _open(_pdf_with_rasters(2))
+    try:
+        cut = cut_embedded_pictures(document)
+    finally:
+        document.close()
+
+    assert cut["report"]["listed"] == 1
+    assert cut["report"]["raster_cap_reached_at_page"] == 2
+    picture_store.release_many([item["id"] for item in cut["pictures"]])
+
+
 def test_skipped_raster_does_not_hide_vector_drawing(monkeypatch) -> None:
     monkeypatch.setenv("MAX_PICTURE_STREAM_BYTES", "1")
     document = pymupdf.open()

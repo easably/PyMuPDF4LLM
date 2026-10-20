@@ -94,13 +94,13 @@ The consumer is Doc2Graph doc-ingest. It already speaks this contract. This acce
 
 | Question | What the consumer does |
 | --- | --- |
-| Incomplete picture list | It keeps the text. `picture_report.truncated`, `by_kind`, and `reasons` (`time`, `count`, `encoded_size`, `decoded_size`, `unreadable`, `storage`, `render_failure`) are stored on the ingest attempt. A failed GET is an extra omission. The PDF is not sent again to fill the gap. |
+| Incomplete picture list | It keeps the text. `picture_report.truncated`, `by_kind`, and `reasons` (`time`, `count`, `encoded_size`, `decoded_size`, `unreadable`, `storage`, `render_failure`, `too_small_displayed`) are stored on the ingest attempt. A failed GET is an extra omission. The PDF is not sent again to fill the gap. |
 | Download time | One client timeout covers the POST and every GET. The setting is `pymupdf4llm_timeout_seconds`, default 600 seconds. Picture ids are fetched one after another inside that same timeout. |
 | One-time id | The first successful GET deletes that id. A repeat GET is 404. The consumer fetches each id once. |
 | Restart | Ids live only in the process, for ten minutes if nobody fetches them. A restart or a second instance drops them. The consumer must fetch from the same instance before that. |
 | Pictures on every text request | No. `include_pictures=true` is sent only when figure indexing is on. A text-only ingest leaves the flag false, and the service does not cut pictures. |
 
-Masks and rasters under 100 pixels on a side are left out of both `listed` and `skipped`. The consumer treats `truncated: false` as "every eligible raster or detected vector drawing was listed", which matches that rule.
+Masks and rasters under 100 pixels on a side are left out of both `listed` and `skipped`. Rasters shown smaller than 40 PDF points are omitted with `too_small_displayed`. The consumer treats `truncated: false` as "every eligible raster or detected vector drawing was listed", which matches that rule.
 
 Scan pages rendered as a whole page, and small decorative marks, are not in this list. Vector drawings are returned as `kind=vector_drawing`; embedded images use `kind=embedded_raster`.
 

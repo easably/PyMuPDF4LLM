@@ -6,6 +6,7 @@ heuristics can be tested without depending on the layout model.
 
 from __future__ import annotations
 
+import os
 from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable, Sequence
 
@@ -183,15 +184,26 @@ def extract_text_spans(page: Any) -> list[dict[str, Any]]:
     return spans
 
 
+def min_picture_display_side_pt() -> float:
+    try:
+        value = float(os.environ.get("MIN_PICTURE_DISPLAY_SIDE_PT", "40"))
+    except ValueError:
+        return 40.0
+    return value if value > 0 else 40.0
+
+
 def embedded_raster_boxes(page: Any) -> list[RectTuple]:
     boxes: list[RectTuple] = []
     seen: set[RectTuple] = set()
+    min_side = min_picture_display_side_pt()
     for image in page.get_images(full=True):
         xref = int(image[0])
         if int(image[2]) < 100 or int(image[3]) < 100:
             continue
         for rect in page.get_image_rects(xref):
             box = _rect(rect)
+            if min(box[2] - box[0], box[3] - box[1]) < min_side:
+                continue
             if box not in seen:
                 seen.add(box)
                 boxes.append(box)

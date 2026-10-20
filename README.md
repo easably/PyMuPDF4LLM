@@ -22,7 +22,10 @@ follow the main column instead of appearing beside their related question.
 
 The picture list contains embedded rasters and vector drawings, identified by
 `kind`. It does not contain a rendered whole page. Rasters under 100 pixels on
-a side are ignored and are not counted as omissions. Raster and vector count
+a side are ignored and are not counted as omissions. A raster shown smaller
+than `MIN_PICTURE_DISPLAY_SIDE_PT` (default 40 PDF points) on either side is
+omitted with reason `too_small_displayed`, so a high-resolution icon drawn as
+a small CAUTION mark does not fill the raster cap. Raster and vector count
 limits are separate (`MAX_RASTER_PICTURES`, default 80, and
 `MAX_VECTOR_PICTURES`, default 120), so the default maximum is 200. If
 `MAX_PICTURES` is set, it remains a total cap across both kinds. Decoded PNG
@@ -31,12 +34,17 @@ bytes and the 64 MiB in-memory store are shared.
 `VECTOR_DETECTION_TIMEOUT_SECONDS` (default 60) separately limits the vector
 page scan. Both are checked between units of work. `picture_report.reasons` counts
 known omissions as `time`, `count`, `encoded_size`, `decoded_size`,
-`unreadable`, `storage`, or `render_failure`. `by_kind` separates raster and
-vector totals, and `vector_detectors` reports listed layout and fallback
-detections. `vector_pages_scanned` and `vector_pages_total` make an incomplete
+`unreadable`, `storage`, `render_failure`, or `too_small_displayed`.
+`raster_cap_reached_at_page` is the 1-based page where the raster count cap
+first stopped listing. `by_kind` separates raster and vector totals, and
+`vector_detectors` reports listed layout and fallback detections.
+`vector_pages_scanned` and `vector_pages_total` make an incomplete
 long-document scan explicit; `vector_slowest_pages` contains its five slowest
 pages. `truncated` is true when an eligible picture was omitted or the vector
 scan did not reach the last page.
+Run the container with 4 GiB of memory (`PYMUPDF4LLM_MEM_LIMIT`, default
+`4g` in the Doc2Graph overlay). A 530-page convert with pictures peaked at
+about 1.1 GiB, so the default byte caps do not need lowering.
 `GET /health` includes `picture_store_bytes` and `picture_store_ids`.
 
 Vector detection thresholds can be overridden with these environment
@@ -86,8 +94,10 @@ detector falls back to layout and geometry.
       "decoded_size": 0,
       "unreadable": 0,
       "storage": 0,
-      "render_failure": 0
+      "render_failure": 0,
+      "too_small_displayed": 0
     },
+    "raster_cap_reached_at_page": null,
     "by_kind": {
       "embedded_raster": {"listed": 0, "skipped": 0},
       "vector_drawing": {"listed": 1, "skipped": 0}

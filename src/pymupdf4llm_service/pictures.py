@@ -29,6 +29,7 @@ import pymupdf
 
 _STORE_TTL_SECONDS = 600.0
 _MIN_SIDE = 100
+_MIN_DISPLAY_SIDE_PT = 40.0
 REASON_KEYS = (
     "time",
     "count",
@@ -37,6 +38,7 @@ REASON_KEYS = (
     "unreadable",
     "storage",
     "render_failure",
+    "too_small_displayed",
 )
 
 
@@ -167,6 +169,7 @@ def empty_picture_report(*, requested: bool) -> dict[str, Any]:
         "vector_pages_scanned": 0,
         "vector_pages_total": 0,
         "vector_slowest_pages": [],
+        "raster_cap_reached_at_page": None,
     }
 
 
@@ -190,6 +193,9 @@ def cut_embedded_pictures(
     max_stream_bytes = _positive_int("MAX_PICTURE_STREAM_BYTES", 8 * 1024 * 1024)
     max_png_bytes = _positive_int("MAX_PICTURE_PNG_BYTES", 64 * 1024 * 1024)
     deadline_seconds = _positive_float("PICTURE_EXTRACT_TIMEOUT_SECONDS", 20.0)
+    min_display_side = _positive_float(
+        "MIN_PICTURE_DISPLAY_SIDE_PT", _MIN_DISPLAY_SIDE_PT
+    )
     started = started if started is not None else time.monotonic()
     png_total = 0
     pictures: list[dict[str, Any]] = []
@@ -199,6 +205,7 @@ def cut_embedded_pictures(
     stored_xref: dict[int, str] = {}
     xref_size: dict[int, tuple[int, int]] = {}
     stop_reason: str | None = None
+    raster_cap_page: int | None = None
 
     try:
         for page_index, page in enumerate(document):
@@ -213,6 +220,10 @@ def cut_embedded_pictures(
                 height = int(item[3])
                 if width < _MIN_SIDE or height < _MIN_SIDE:
                     continue
+                if _displayed_too_small(page, xref, min_display_side):
+                    reasons["too_small_displayed"] += 1
+                    skipped += 1
+                    continue
                 if stop_reason is not None:
                     reasons[stop_reason] += 1
                     skipped += 1
@@ -223,6 +234,8 @@ def cut_embedded_pictures(
                     skipped += 1
                     continue
                 if len(pictures) >= max_images:
+                    if raster_cap_page is None:
+                        raster_cap_page = page_index + 1
                     stop_reason = "count"
                     reasons["count"] += 1
                     skipped += 1
@@ -305,6 +318,7 @@ def cut_embedded_pictures(
         "listed": len(pictures),
         "skipped": skipped,
     }
+    report["raster_cap_reached_at_page"] = raster_cap_page
     report["_png_bytes"] = png_total
     _sort_and_index(pictures)
     if not keep_internal:
@@ -457,6 +471,18 @@ def cut_pictures(
     _sort_and_index(pictures)
     _strip_internal(pictures, report)
     return cut
+
+
+def _displayed_too_small(
+    page: pymupdf.Page,
+    xref: int,
+    min_side_pt: float,
+) -> bool:
+    """True when every shown box of this image is smaller than the point floor."""
+    rects = page.get_image_rects(xref)
+    if not rects:
+        return False
+    return all(min(rect.width, rect.height) < min_side_pt for rect in rects)
 
 
 def _image_box(page: pymupdf.Page, xref: int) -> tuple[float, float, float, float]:

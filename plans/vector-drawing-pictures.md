@@ -237,3 +237,90 @@ All seven items were implemented.
   1070.1 MiB peak RSS; 80 rasters and 4 vectors downloaded with no failed
   GET or raster-byte mismatch.
 - Neither run stopped vector detection on time.
+
+## Review 2026-10-20 (2): commit a192787
+
+Items 1–7 of the first review are done. Checked: indirect `/Length`
+resolved, listed rasters only count as covered, mixed group measured with
+all pictures (recall 100%), separate `VECTOR_DETECTION_TIMEOUT_SECONDS`,
+`vector_pages_scanned` 220/220 and 530/530, thresholds and figure-ID
+patterns in `VectorDrawingSettings` with `VECTOR_*` env names, `MAX_PICTURES`
+kept as a total cap, CHANGELOG 0.5.0. 87 tests pass in a Linux Python 3.10
+run.
+
+Remaining items before deploy.
+
+### 8. A small caution icon uses most of the raster budget
+
+Raster xref 17 is the CAUTION triangle: 149×133 px, but drawn at about
+17×15 pt. It occurs 43 times in the compact manual and passes the
+100 px pixel-size filter each time. 43 of the 80 raster slots go to this
+icon. The 81st raster occurrence is on page 56, so pages 56–220 return no
+rasters at all. Three of the four false pictures in the mixed group are this
+icon (pages 82, 97, 130).
+
+- Add a displayed-size filter in PDF points, using `get_image_rects()`:
+  skip occurrences whose shown box is smaller than
+  `MIN_PICTURE_DISPLAY_SIDE_PT` (start 40) on either side. New reason
+  `too_small_displayed`.
+- Keep the pixel-size filter as it is.
+- Report `raster_cap_reached_at_page` when the raster count cap stops
+  listing, so a consumer sees where rasters end.
+- Rerun both acceptances. Expected: no caution icons listed, rasters
+  listed further into both manuals. Then decide whether the raster default
+  of 80 is still too low for long manuals; record the decision in the run
+  file.
+
+### 9. Unclassified false pictures
+
+The corpus run still shows 5 `unclassified` false pictures: pages 99, 100,
+178, 184 (vector-only) and 130 (mixed). Look at each crop. Either:
+
+- it is a real drawing missing from `labels.json` → add the label; or
+- it is a detector error → add a `not_pictures` label with its type and
+  fix the rule if the fix is small.
+
+Report precision per group after this.
+
+### 10. Memory headroom
+
+Peak RSS on the CAT manual rises from 776 MiB (text) to 1070 MiB (full).
+Check the container memory limit used in deployment. Document the
+recommended memory in README next to the picture limits. If the limit is
+close, lower `MAX_PICTURE_PNG_BYTES` or the store cap by default.
+
+### 11. Optional: prefilter default
+
+`prefilter_min_paths` defaults to 1, so almost every page runs full
+detection. Speed is acceptable now (1.33× and 1.22×). Measure with 5 and
+10 on both manuals; change the default only if recall on the corpus stays
+the same.
+
+### 12. Consumer check before deploy
+
+- Run doc2graph indexing of the compact manual against 0.5.0 with
+  `include_pictures=true` on a staging setup.
+- Confirm doc2graph accepts the new `kind` and report fields without
+  errors, and record how many pictures it captions.
+
+Stop after item 10 (11 and 12 may follow) and report: tests, both
+acceptance runs with per-group recall and precision, raster listed and
+skipped by reason, `raster_cap_reached_at_page`, peak memory.
+
+### Review 2 completion 2026-10-20
+
+Items 8–10 done. Item 11 measured, default unchanged. Item 12 not run
+(staging doc2graph).
+
+- Tests: 91 passed locally.
+- Compact corpus: vector-only and mixed both 100% recall and 100%
+  precision; negatives still empty. False pictures: none.
+- Compact full run: 80 rasters listed, 43 `too_small_displayed`, 169
+  `count`, cap at page 58; 67 vectors; 220/220 pages; 1.31× text-only;
+  750.7 MiB peak RSS.
+- CAT full run: 80 rasters, 0 `too_small_displayed`, cap at page 111;
+  4 vectors; 530/530 pages; 1.20× text-only. Deploy memory limit is 4 GiB;
+  documented in README. Default PNG/store caps kept.
+- Raster cap stays 80: both manuals still have hundreds of leftover
+  rasters; raising the default is a caption-cost choice for doc2graph.
+- Prefilter 5 and 10 keep 100% labeled recall; default remains 1.
