@@ -408,3 +408,22 @@ blocked.
     available: label 10–15 drawing pages, run with current defaults, record
     the number in README. Until then README states vector recall is
     measured on one manual only.
+
+### Review 4 completion 2026-10-20
+
+Item 16 committed (`3b9b587`). Item 17 done:
+
+- Edge/header/footer rejection (`VECTOR_EDGE_BAND_SHARE`, default 0.08) unless
+  figure id or caption nearby; small-area (< 4000 pt²) marks without evidence
+  dropped (CAT page 530 logo).
+- Page 500: not a threshold miss. After `import pymupdf.layout`, `find_tables()`
+  returns empty on that page, so the existing table overlap rule never fires.
+  Fix: do not resurrect clusters that sit inside a layout picture rejected as
+  `text_only` / `too_small` / `frame_sized`. Layout `table` boxes were tried and
+  rejected — they cover real compact drawings.
+- Compact (`runs/2026-10-20-chrome-filter.md`): vector_only and mixed 100%
+  recall and precision.
+- CAT holdout (`runs/2026-10-20-holdout-chrome-filter.md`): mixed 100%/100%,
+  negatives empty; pages 1, 500, 530 clean.
+- 94 tests pass. Item 18 blocked until a third vendor PDF is available.
+  Items 13–14 still need staging doc2graph.

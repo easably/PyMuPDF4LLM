@@ -17,6 +17,12 @@ from pymupdf4llm_service.picture_boxes import (
     refine_candidates,
 )
 
+_CAPTION_PATTERN = re.compile(
+    r"(?i)\b(?:illustration|figure|fig\.?)\s*\d+"
+)
+_CHROME_LAYOUT_CLASSES = frozenset({"page-header", "page-footer"})
+
+
 @dataclass(frozen=True)
 class VectorDrawingSettings:
     """Detection thresholds; every field can be overridden by environment."""
@@ -46,6 +52,8 @@ class VectorDrawingSettings:
     split_margin: float = 8.0
     split_path_min_extent: float = 2.0
     prefilter_min_paths: int = 1
+    edge_band_share: float = 0.08
+    caption_margin: float = 36.0
     figure_id_patterns: tuple[str, ...] = (r"\b(?:TX|TS)\d{5,}",)
 
     @classmethod
@@ -95,6 +103,8 @@ _NUMERIC_SETTING_FIELDS: dict[str, type[int] | type[float]] = {
     "split_margin": float,
     "split_path_min_extent": float,
     "prefilter_min_paths": int,
+    "edge_band_share": float,
+    "caption_margin": float,
 }
 
 
@@ -105,6 +115,7 @@ def detect_vector_drawings(
     *,
     raster_boxes: Sequence[Sequence[float]] | None = None,
     paths: Sequence[dict[str, Any]] | None = None,
+    page_boxes: Sequence[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Return vector boxes with ``layout`` or ``fallback`` detector labels."""
     config = settings or VectorDrawingSettings.from_environment()
@@ -117,6 +128,7 @@ def detect_vector_drawings(
         else embedded_raster_boxes(page)
     )
     useful_paths = useful_vector_paths(page, paths)
+    chrome_boxes, caption_boxes = _layout_support_boxes(page_boxes)
 
     refined = refine_candidates(
         page_bbox=page_box,
@@ -127,7 +139,11 @@ def detect_vector_drawings(
     )
     found: list[dict[str, Any]] = []
     layout_regions: list[tuple[RectTuple, bool]] = []
+    rejected_layout: list[RectTuple] = []
     for result in refined:
+        if result.reason in {"text_only", "too_small", "frame_sized"}:
+            rejected_layout.append(result.original_bbox)
+            continue
         if result.reason not in {"accepted", "shrunk"} or result.final_bbox is None:
             continue
         split = _split_on_figure_ids(
@@ -145,6 +161,15 @@ def detect_vector_drawings(
         config,
     )
     for box in merged_layout:
+        if _reject_chrome_or_edge(
+            box,
+            page_box,
+            chrome_boxes,
+            caption_boxes,
+            text_spans,
+            config,
+        ):
+            continue
         source_regions = [
             (source, split_by_id)
             for source, split_by_id in layout_regions
@@ -205,6 +230,13 @@ def detect_vector_drawings(
                 >= config.fallback_maximum_page_area_share
             ):
                 continue
+            if any(
+                _intersection_share(cluster, rejected) >= config.covered_path_share
+                for rejected in rejected_layout
+            ):
+                # Layout already said this region is not a drawing; do not
+                # resurrect it when find_tables() is empty after pymupdf.layout.
+                continue
             page_width = page_box[2] - page_box[0]
             page_area = _area(page_box)
             table_sized = (
@@ -213,6 +245,8 @@ def detect_vector_drawings(
                 or _area(cluster) >= page_area * config.fallback_table_min_area_share
             )
             if table_boxes is None:
+                # Prefer find_tables() only. Layout "table" boxes on this
+                # corpus are often huge page bands that cover real drawings.
                 table_boxes = _table_boxes(page)
             table_share = max(
                 (_intersection_share(cluster, table) for table in table_boxes),
@@ -237,8 +271,29 @@ def detect_vector_drawings(
                 for raster in rasters
             ):
                 continue
+            if _reject_chrome_or_edge(
+                cluster,
+                page_box,
+                chrome_boxes,
+                caption_boxes,
+                text_spans,
+                config,
+            ):
+                continue
             _add_or_merge(found, cluster, "fallback", config, text_spans)
 
+    # Drop mid-page logo marks: small area, no figure id or caption.
+    # Thin wide drawings (bolt-head strips) keep a large area and survive.
+    found = [
+        item
+        for item in found
+        if not (
+            _area(_rect(item["bbox"])) < 4000.0
+            and not _has_drawing_evidence(
+                _rect(item["bbox"]), caption_boxes, text_spans, config
+            )
+        )
+    ]
     found.sort(key=lambda item: (item["bbox"][1], item["bbox"][0]))
     return found
 
@@ -252,13 +307,19 @@ def vector_candidates(
     output: list[dict[str, Any]] = []
     for page_number in pages:
         page = document[page_number - 1]
+        page_boxes = chunks_by_page[page_number].get("page_boxes") or []
         layout_boxes = [
             box["bbox"]
-            for box in chunks_by_page[page_number].get("page_boxes") or []
+            for box in page_boxes
             if box.get("class") == "picture"
         ]
         for index, item in enumerate(
-            detect_vector_drawings(page, layout_boxes, raster_boxes=[])
+            detect_vector_drawings(
+                page,
+                layout_boxes,
+                raster_boxes=[],
+                page_boxes=page_boxes,
+            )
         ):
             output.append(
                 {
@@ -290,15 +351,17 @@ def all_picture_candidates(
                     "detector": "embedded_raster",
                 }
             )
+        page_boxes = chunks_by_page[page_number].get("page_boxes") or []
         layout_boxes = [
             box["bbox"]
-            for box in chunks_by_page[page_number].get("page_boxes") or []
+            for box in page_boxes
             if box.get("class") == "picture"
         ]
         vectors = detect_vector_drawings(
             page,
             layout_boxes,
             raster_boxes=raster_boxes,
+            page_boxes=page_boxes,
         )
         for index, item in enumerate(vectors):
             output.append(
@@ -519,6 +582,74 @@ def _figure_id(text: str, settings: VectorDrawingSettings) -> str | None:
         if match is not None:
             return match.group(0)
     return None
+
+
+def _layout_support_boxes(
+    page_boxes: Sequence[dict[str, Any]] | None,
+) -> tuple[list[RectTuple], list[RectTuple]]:
+    chrome: list[RectTuple] = []
+    captions: list[RectTuple] = []
+    for box in page_boxes or ():
+        raw = box.get("bbox")
+        if raw is None:
+            continue
+        rect = _rect(raw)
+        class_name = str(box.get("class") or "")
+        if class_name in _CHROME_LAYOUT_CLASSES:
+            chrome.append(rect)
+        elif class_name == "caption":
+            captions.append(rect)
+    return chrome, captions
+
+
+def _has_drawing_evidence(
+    box: RectTuple,
+    caption_boxes: Sequence[RectTuple],
+    text_spans: Sequence[dict[str, Any]],
+    settings: VectorDrawingSettings,
+) -> bool:
+    if _nearby_figure_ids(
+        box,
+        text_spans,
+        settings.fallback_figure_id_margin,
+        settings,
+    ):
+        return True
+    margin = settings.caption_margin
+    expanded = _expand(box, margin)
+    for caption in caption_boxes:
+        if _intersects(expanded, caption):
+            return True
+    for span in text_spans:
+        text = str(span.get("text") or "")
+        if not _CAPTION_PATTERN.search(text):
+            continue
+        if _intersects(expanded, _rect(span["bbox"])):
+            return True
+    return False
+
+
+def _center_in_edge_band(box: RectTuple, page_box: RectTuple, share: float) -> bool:
+    page_height = page_box[3] - page_box[1]
+    band = page_height * share
+    center_y = (box[1] + box[3]) / 2
+    return center_y <= page_box[1] + band or center_y >= page_box[3] - band
+
+
+def _reject_chrome_or_edge(
+    box: RectTuple,
+    page_box: RectTuple,
+    chrome_boxes: Sequence[RectTuple],
+    caption_boxes: Sequence[RectTuple],
+    text_spans: Sequence[dict[str, Any]],
+    settings: VectorDrawingSettings,
+) -> bool:
+    """True when the box is page chrome without a figure id or caption."""
+    in_chrome = any(_center_in(box, chrome) for chrome in chrome_boxes)
+    in_edge = _center_in_edge_band(box, page_box, settings.edge_band_share)
+    if not in_chrome and not in_edge:
+        return False
+    return not _has_drawing_evidence(box, caption_boxes, text_spans, settings)
 
 
 def _valid_box(

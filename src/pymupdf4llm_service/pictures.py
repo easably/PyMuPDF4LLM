@@ -378,9 +378,10 @@ def cut_pictures(
             page_started = time.monotonic()
             page = document[page_number - 1]
             chunk = chunks_by_page.get(page_number) or {}
+            page_boxes = chunk.get("page_boxes") or []
             layout_boxes = [
                 box["bbox"]
-                for box in chunk.get("page_boxes") or []
+                for box in page_boxes
                 if box.get("class") == "picture"
             ]
             paths = page.get_drawings()
@@ -392,6 +393,7 @@ def cut_pictures(
                     settings,
                     raster_boxes=listed_rasters_by_page.get(page_number, []),
                     paths=paths,
+                    page_boxes=page_boxes,
                 )
             else:
                 candidates = []

@@ -80,14 +80,59 @@ def test_ruled_table_without_figure_id_is_not_a_drawing() -> None:
 def test_page_edge_drawing_is_clipped() -> None:
     document, page = _page()
     try:
-        page.draw_rect(pymupdf.Rect(0, 0, 80, 70), width=2)
-        page.draw_line((0, 70), (80, 0), width=2)
+        # Keep the drawing clear of the 8% edge band and give it a figure id
+        # so chrome/logo filters do not drop a real edge-clipped figure.
+        page.draw_rect(pymupdf.Rect(0, 80, 80, 160), width=2)
+        page.draw_line((0, 150), (80, 90), width=2)
+        page.insert_text((10, 175), "TX100099")
 
         found = detect_vector_drawings(page, [])
 
         assert len(found) == 1
         assert found[0]["bbox"][0] == 0
-        assert found[0]["bbox"][1] == 0
+    finally:
+        document.close()
+
+
+def test_header_band_logo_without_caption_is_ignored() -> None:
+    document, page = _page()
+    try:
+        page.draw_rect(pymupdf.Rect(40, 10, 110, 35), width=2)
+        page.draw_line((45, 15), (105, 30), width=2)
+
+        assert detect_vector_drawings(page, []) == []
+    finally:
+        document.close()
+
+
+def test_header_band_drawing_with_figure_id_is_kept() -> None:
+    document, page = _page()
+    try:
+        page.draw_rect(pymupdf.Rect(40, 10, 160, 35), width=2)
+        page.draw_line((45, 15), (155, 30), width=2)
+        page.insert_text((40, 55), "TX100050")
+
+        found = detect_vector_drawings(page, [])
+
+        assert len(found) == 1
+    finally:
+        document.close()
+
+
+def test_layout_text_only_region_is_not_resurrected_by_fallback() -> None:
+    document, page = _page()
+    try:
+        for x in (40, 140, 240, 340):
+            page.draw_line((x, 80), (x, 200), width=1)
+        for y in (80, 120, 160, 200):
+            page.draw_line((40, y), (340, y), width=1)
+        page.insert_text((60, 100), "row 1")
+        page.insert_text((60, 140), "row 2")
+        page.insert_text((60, 180), "row 3")
+
+        # Layout marks the ruled block as a picture; refine rejects it as
+        # text_only / table-like. Fallback must not bring it back.
+        assert detect_vector_drawings(page, [(40, 80, 340, 200)]) == []
     finally:
         document.close()
 

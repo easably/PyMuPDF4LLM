@@ -29,10 +29,13 @@ compact track loader. Run it with the same metric script:
   --report acceptance/cat-operator-manual/runs/2026-10-20-holdout.md
 ```
 
-The 2026-10-20 holdout found mixed-page raster recall 100% and precision 90%,
-with three logo/header false vectors and one table false vector. Path-heavy
-table pages stayed empty. This manual has almost no vector-only drawings, so
-it is a false-positive / raster check, not a second vector recall corpus.
+The first 2026-10-20 holdout (before the chrome filter) found mixed-page
+raster recall 100% and precision 90%, with three logo/header false vectors and
+one table false vector. After rejecting header/footer/edge logos and
+`text_only` layout resurrections (`runs/2026-10-20-holdout-chrome-filter.md`):
+mixed 100% recall and precision, negatives empty. Path-heavy table pages stay
+empty. This manual has almost no vector-only drawings, so it is a
+false-positive / raster check, not a second vector recall corpus.
 
 ## Local
 
