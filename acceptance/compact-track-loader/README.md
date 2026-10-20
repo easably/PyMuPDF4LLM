@@ -55,6 +55,15 @@ The baseline uses raw `pymupdf-layout` picture boxes:
 Use `--candidate-source module:function` for a later detector. The callable
 receives the open document, chunks keyed by 1-based page number, and selected
 page numbers, and returns dictionaries containing `page` and `bbox`.
+Use `--mixed-candidate-source module:function` when mixed pages must be
+measured with both embedded rasters and vector candidates:
+
+```bash
+.venv/bin/python scripts/accept_compact_track_loader.py \
+  --pdf "tessdata/pdfs/compact track loader.pdf" \
+  --candidate-source pymupdf4llm_service.vector_drawings:vector_candidates \
+  --mixed-candidate-source pymupdf4llm_service.vector_drawings:all_picture_candidates
+```
 
 Runs report drawing recall and precision by group, false-picture categories,
 text phrases found in normal Markdown versus `picture text`, legend-line

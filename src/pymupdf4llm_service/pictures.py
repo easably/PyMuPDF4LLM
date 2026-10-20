@@ -1,13 +1,14 @@
-"""Cut embedded raster pictures while the PDF is already open for text.
+"""Cut embedded rasters and vector drawings while the PDF is open for text.
 
 The convert JSON lists each occurrence by its own id. The bytes stay here
 until that id is fetched. A picture is skipped before pixel decode when its
 compressed stream or pixel size is over the budget, or when that size cannot
 be measured.
 
-Vector drawings, diagrams inferred from page layout, and rendered scan pages
-are outside this list. ``PICTURE_EXTRACT_TIMEOUT_SECONDS`` (default 20) is
-checked between pictures. It does not interrupt a decode that has started.
+Vector drawings use refined layout regions plus a drawing-cluster fallback.
+Rendered scan pages are outside this list. ``PICTURE_EXTRACT_TIMEOUT_SECONDS``
+(default 20) is checked between pictures. It does not interrupt work that has
+already started.
 
 Ids are transient and live only in this process. Run one service instance
 unless a shared store is added on purpose. The first successful GET of an id
@@ -28,7 +29,15 @@ import pymupdf
 
 _STORE_TTL_SECONDS = 600.0
 _MIN_SIDE = 100
-REASON_KEYS = ("time", "count", "encoded_size", "decoded_size", "unreadable", "storage")
+REASON_KEYS = (
+    "time",
+    "count",
+    "encoded_size",
+    "decoded_size",
+    "unreadable",
+    "storage",
+    "render_failure",
+)
 
 
 class PictureStore:
@@ -143,26 +152,45 @@ class PictureStore:
 
 def empty_picture_report(*, requested: bool) -> dict[str, Any]:
     return {
-        "scope": "embedded_raster",
+        "scope": "embedded_raster_and_vector_drawing",
         "requested": requested,
         "truncated": False,
         "listed": 0,
         "skipped": 0,
         "reasons": {key: 0 for key in REASON_KEYS},
+        "by_kind": {
+            "embedded_raster": {"listed": 0, "skipped": 0},
+            "vector_drawing": {"listed": 0, "skipped": 0},
+        },
+        "vector_detectors": {"layout": 0, "fallback": 0},
+        "vector_id_actions": {"split": 0, "merged": 0},
+        "vector_pages_scanned": 0,
+        "vector_pages_total": 0,
+        "vector_slowest_pages": [],
     }
 
 
-def cut_embedded_pictures(document: pymupdf.Document) -> dict[str, Any]:
+def cut_embedded_pictures(
+    document: pymupdf.Document,
+    *,
+    started: float | None = None,
+    keep_internal: bool = False,
+) -> dict[str, Any]:
     """Return listed pictures and why other embedded rasters were left out.
 
     ``scope`` is ``embedded_raster``. The counts do not include vector drawings
     or figures inferred from page layout.
     """
-    max_images = _positive_int("MAX_PICTURES", 80)
+    max_images = _positive_int(
+        "MAX_RASTER_PICTURES", _positive_int("MAX_PICTURES", 80)
+    )
+    total_cap = _optional_positive_int("MAX_PICTURES")
+    if total_cap is not None:
+        max_images = min(max_images, total_cap)
     max_stream_bytes = _positive_int("MAX_PICTURE_STREAM_BYTES", 8 * 1024 * 1024)
     max_png_bytes = _positive_int("MAX_PICTURE_PNG_BYTES", 64 * 1024 * 1024)
     deadline_seconds = _positive_float("PICTURE_EXTRACT_TIMEOUT_SECONDS", 20.0)
-    started = time.monotonic()
+    started = started if started is not None else time.monotonic()
     png_total = 0
     pictures: list[dict[str, Any]] = []
     stored_ids: list[str] = []
@@ -214,6 +242,8 @@ def cut_embedded_pictures(document: pymupdf.Document) -> dict[str, Any]:
                             "index_on_page": index_on_page,
                             "width": known_width,
                             "height": known_height,
+                            "kind": "embedded_raster",
+                            "_bbox": _image_box(page, xref),
                         }
                     )
                     stored_ids.append(picture_id)
@@ -223,7 +253,11 @@ def cut_embedded_pictures(document: pymupdf.Document) -> dict[str, Any]:
                     reasons["decoded_size"] += 1
                     skipped += 1
                     continue
-                stream_length = _stream_length(document, xref)
+                stream_length = _stream_length(
+                    document,
+                    xref,
+                    allow_raw_measure=True,
+                )
                 if stream_length is None or stream_length > max_stream_bytes:
                     reasons["encoded_size"] += 1
                     skipped += 1
@@ -249,6 +283,8 @@ def cut_embedded_pictures(document: pymupdf.Document) -> dict[str, Any]:
                         "index_on_page": index_on_page,
                         "width": width,
                         "height": height,
+                        "kind": "embedded_raster",
+                        "_bbox": _image_box(page, xref),
                     }
                 )
                 stored_ids.append(picture_id)
@@ -265,17 +301,223 @@ def cut_embedded_pictures(document: pymupdf.Document) -> dict[str, Any]:
     report["listed"] = len(pictures)
     report["skipped"] = skipped
     report["reasons"] = reasons
+    report["by_kind"]["embedded_raster"] = {
+        "listed": len(pictures),
+        "skipped": skipped,
+    }
+    report["_png_bytes"] = png_total
+    _sort_and_index(pictures)
+    if not keep_internal:
+        _strip_internal(pictures, report)
     return {"pictures": pictures, "report": report}
 
 
-def _stream_length(document: pymupdf.Document, xref: int) -> int | None:
-    kind, value = document.xref_get_key(xref, "Length")
-    if kind != "int":
-        return None
+def cut_pictures(
+    document: pymupdf.Document,
+    chunks: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Cut embedded rasters and detected vector drawings under shared budgets."""
+    from pymupdf4llm_service.vector_drawings import (
+        VectorDrawingSettings,
+        detect_vector_drawings,
+        useful_vector_paths,
+    )
+
+    started = time.monotonic()
+    cut = cut_embedded_pictures(
+        document,
+        started=started,
+        keep_internal=True,
+    )
+    pictures = cut["pictures"]
+    report = cut["report"]
+    reasons = report["reasons"]
+    max_png_bytes = _positive_int("MAX_PICTURE_PNG_BYTES", 64 * 1024 * 1024)
+    png_total = int(report.get("_png_bytes") or 0)
+    vector_started = time.monotonic()
+    deadline_seconds = _positive_float("VECTOR_DETECTION_TIMEOUT_SECONDS", 60.0)
+    max_vectors = _positive_int("MAX_VECTOR_PICTURES", 120)
+    total_cap = _optional_positive_int("MAX_PICTURES")
+    settings = VectorDrawingSettings.from_environment()
+    vector_listed = 0
+    vector_skipped = 0
+    detectors = {"layout": 0, "fallback": 0}
+    id_actions = {"split": 0, "merged": 0}
+    pages_scanned = 0
+    page_timings: list[tuple[float, int]] = []
+    chunks_by_page = {
+        int((chunk.get("metadata") or {}).get("page_number") or 0): chunk
+        for chunk in chunks
+    }
+    listed_rasters_by_page: dict[int, list[tuple[float, float, float, float]]] = {}
+    for picture in pictures:
+        listed_rasters_by_page.setdefault(int(picture["page"]), []).append(
+            tuple(picture["_bbox"])
+        )
+
     try:
-        return int(value)
-    except ValueError:
-        return None
+        for page_number in range(1, document.page_count + 1):
+            if time.monotonic() - vector_started >= deadline_seconds:
+                reasons["time"] += 1
+                vector_skipped += 1
+                break
+            page_started = time.monotonic()
+            page = document[page_number - 1]
+            chunk = chunks_by_page.get(page_number) or {}
+            layout_boxes = [
+                box["bbox"]
+                for box in chunk.get("page_boxes") or []
+                if box.get("class") == "picture"
+            ]
+            paths = page.get_drawings()
+            useful_paths = useful_vector_paths(page, paths)
+            if layout_boxes or len(useful_paths) >= settings.prefilter_min_paths:
+                candidates = detect_vector_drawings(
+                    page,
+                    layout_boxes,
+                    settings,
+                    raster_boxes=listed_rasters_by_page.get(page_number, []),
+                    paths=paths,
+                )
+            else:
+                candidates = []
+            pages_scanned += 1
+            page_timings.append((time.monotonic() - page_started, page_number))
+            for candidate in candidates:
+                stop_reason = None
+                if time.monotonic() - vector_started >= deadline_seconds:
+                    stop_reason = "time"
+                elif vector_listed >= max_vectors:
+                    stop_reason = "count"
+                elif total_cap is not None and len(pictures) >= total_cap:
+                    stop_reason = "count"
+                if stop_reason is not None:
+                    reasons[stop_reason] += 1
+                    vector_skipped += 1
+                    continue
+                box = candidate["bbox"]
+                try:
+                    pixmap = page.get_pixmap(
+                        clip=pymupdf.Rect(box),
+                        dpi=150,
+                        alpha=False,
+                    )
+                    png = pixmap.tobytes("png")
+                except Exception:
+                    reasons["render_failure"] += 1
+                    vector_skipped += 1
+                    continue
+                if png_total + len(png) > max_png_bytes:
+                    reasons["decoded_size"] += 1
+                    vector_skipped += 1
+                    continue
+                picture_id = picture_store.put(png)
+                if picture_id is None:
+                    reasons["storage"] += 1
+                    vector_skipped += 1
+                    continue
+                pictures.append(
+                    {
+                        "id": picture_id,
+                        "page": page_number,
+                        "index_on_page": 0,
+                        "width": pixmap.width,
+                        "height": pixmap.height,
+                        "kind": "vector_drawing",
+                        "_bbox": tuple(box),
+                    }
+                )
+                vector_listed += 1
+                png_total += len(png)
+                detectors[candidate["detector"]] += 1
+                id_actions["split"] += int(candidate.get("id_split", False))
+                id_actions["merged"] += int(candidate.get("id_merged", False))
+    except Exception:
+        picture_store.release_many([item["id"] for item in pictures])
+        raise
+
+    report["listed"] = len(pictures)
+    report["skipped"] += vector_skipped
+    report["truncated"] = (
+        report["skipped"] > 0 or pages_scanned < document.page_count
+    )
+    report["by_kind"]["vector_drawing"] = {
+        "listed": vector_listed,
+        "skipped": vector_skipped,
+    }
+    report["vector_detectors"] = detectors
+    report["vector_id_actions"] = id_actions
+    report["vector_pages_scanned"] = pages_scanned
+    report["vector_pages_total"] = document.page_count
+    report["vector_slowest_pages"] = [
+        {"page": page, "seconds": round(seconds, 6)}
+        for seconds, page in sorted(page_timings, reverse=True)[:5]
+    ]
+    report["_png_bytes"] = png_total
+    _sort_and_index(pictures)
+    _strip_internal(pictures, report)
+    return cut
+
+
+def _image_box(page: pymupdf.Page, xref: int) -> tuple[float, float, float, float]:
+    rects = page.get_image_rects(xref)
+    if not rects:
+        return (0.0, 0.0, 0.0, 0.0)
+    return tuple(map(float, rects[0]))
+
+
+def _sort_and_index(pictures: list[dict[str, Any]]) -> None:
+    pictures.sort(
+        key=lambda item: (
+            int(item["page"]),
+            float(item.get("_bbox", (0, 0, 0, 0))[1]),
+            float(item.get("_bbox", (0, 0, 0, 0))[0]),
+            item["kind"],
+        )
+    )
+    current_page = None
+    index = 0
+    for item in pictures:
+        if item["page"] != current_page:
+            current_page = item["page"]
+            index = 0
+        item["index_on_page"] = index
+        index += 1
+
+
+def _strip_internal(
+    pictures: list[dict[str, Any]],
+    report: dict[str, Any],
+) -> None:
+    for item in pictures:
+        item.pop("_bbox", None)
+    report.pop("_png_bytes", None)
+
+
+def _stream_length(
+    document: pymupdf.Document,
+    xref: int,
+    *,
+    allow_raw_measure: bool = False,
+) -> int | None:
+    kind, value = document.xref_get_key(xref, "Length")
+    if kind == "int":
+        try:
+            return int(value)
+        except ValueError:
+            pass
+    elif kind == "xref":
+        try:
+            length_xref = int(value.split()[0])
+            return int(document.xref_object(length_xref).strip())
+        except (ValueError, IndexError):
+            pass
+    if allow_raw_measure:
+        try:
+            return len(document.xref_stream_raw(xref))
+        except Exception:
+            return None
+    return None
 
 
 def _png_bytes(document: pymupdf.Document, xref: int) -> bytes | None:
@@ -301,6 +543,17 @@ def _positive_float(name: str, default: float) -> float:
     except ValueError:
         return default
     return value if value > 0 else default
+
+
+def _optional_positive_int(name: str) -> int | None:
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
 
 
 picture_store = PictureStore()

@@ -9,7 +9,7 @@ Expected file:
 
 The script checks both before any HTTP call. If the path is missing it tells you to pass `--pdf` or `CAT_MANUAL_PDF`.
 
-Recorded runs live in `acceptance/cat-operator-manual/runs/`, one file per date and host. The 16 October 2026 run on server1 is `runs/2026-10-16-server1.md`. The size-eligible image count in a run is an inventory of the PDF. It is not the number of files the service is expected to return. `MAX_PICTURES` is 80, and the picture cut also stops on time and on the in-memory store.
+Recorded runs live in `acceptance/cat-operator-manual/runs/`, one file per date and host. The 16 October 2026 run on server1 is `runs/2026-10-16-server1.md`. The size-eligible image count in a run is an inventory of the PDF. It is not the number of files the service is expected to return. Raster and vector caps are separate by default; setting `MAX_PICTURES` applies a total cap. Raster extraction and vector detection have separate time limits and share the decoded-byte and in-memory store budgets.
 
 Quality investigations live in `analyses/`. The comparison of the current OCR
 policy, no OCR, and page text thresholds is
@@ -94,15 +94,15 @@ The consumer is Doc2Graph doc-ingest. It already speaks this contract. This acce
 
 | Question | What the consumer does |
 | --- | --- |
-| Incomplete picture list | It keeps the text. `picture_report.truncated` and `reasons` (`time`, `count`, `encoded_size`, `decoded_size`, `unreadable`, `storage`) are stored on the ingest attempt. A failed GET is an extra omission. The PDF is not sent again to fill the gap. |
+| Incomplete picture list | It keeps the text. `picture_report.truncated`, `by_kind`, and `reasons` (`time`, `count`, `encoded_size`, `decoded_size`, `unreadable`, `storage`, `render_failure`) are stored on the ingest attempt. A failed GET is an extra omission. The PDF is not sent again to fill the gap. |
 | Download time | One client timeout covers the POST and every GET. The setting is `pymupdf4llm_timeout_seconds`, default 600 seconds. Picture ids are fetched one after another inside that same timeout. |
 | One-time id | The first successful GET deletes that id. A repeat GET is 404. The consumer fetches each id once. |
 | Restart | Ids live only in the process, for ten minutes if nobody fetches them. A restart or a second instance drops them. The consumer must fetch from the same instance before that. |
 | Pictures on every text request | No. `include_pictures=true` is sent only when figure indexing is on. A text-only ingest leaves the flag false, and the service does not cut pictures. |
 
-Masks and rasters under 100 pixels on a side are left out of both `listed` and `skipped`. The consumer treats `truncated: false` as "every eligible embedded raster was listed", which matches that rule.
+Masks and rasters under 100 pixels on a side are left out of both `listed` and `skipped`. The consumer treats `truncated: false` as "every eligible raster or detected vector drawing was listed", which matches that rule.
 
-Scan pages rendered as a whole page, and small decorative marks, are not in this list. Doc2Graph does not get them from this service. When it needs region layout it stays on Docling instead. Whether those images should be added is a product choice for Doc2Graph, not a change made by this run.
+Scan pages rendered as a whole page, and small decorative marks, are not in this list. Vector drawings are returned as `kind=vector_drawing`; embedded images use `kind=embedded_raster`.
 
 No extra truncation field is required for the consumer to see a short list. `truncated` and `reasons` are already on the response. The 16 October 2026 run on server1 confirmed that: the manual came back `truncated: true` with `reasons.count` 788, and Doc2Graph already records those fields. See `runs/2026-10-16-server1.md`.
 

@@ -116,3 +116,124 @@ Also:
 
 - Stop calling every picture an embedded raster.
 - Show raster and vector counts in the journal.
+
+## Review 2026-10-20: fixes before commit
+
+Review of the uncommitted 0.5.0 changes. Detection quality on labeled pages
+is good (vector-only recall 97.6%, precision 90.9%). The items below block
+the commit. Do them in order and stop for review after item 7.
+
+### 1. Embedded rasters with an indirect `/Length` are dropped (existing bug)
+
+`_stream_length()` returns `None` when `/Length` is an indirect reference
+(`('xref', '70 0 R')`). Every raster in the compact track loader manual is
+then skipped as `encoded_size`: 0 listed, 292 skipped. The vector detector
+still treats those raster areas as covered, so the figure is lost
+completely (pages 3, 30, 70, 97, 130).
+
+- Resolve the indirect object and read its integer value.
+- If the length still cannot be read, fall back to a bounded measure (for
+  example `len(document.xref_stream_raw(xref))` only when the image pixel
+  size is under the decode budget). Do not skip silently.
+- Do not treat a raster box as covered for vector detection unless that
+  raster was actually listed. Otherwise a skipped raster hides a drawing.
+- Test: generated PDF with an indirect `/Length` image → one
+  `embedded_raster`.
+- Rerun both acceptances; the CAT raster byte comparison must still pass.
+
+### 2. The acceptance mixed group measures vectors only
+
+`vector_candidates()` returns only vector boxes, so raster drawings in the
+mixed group can never match. The 60% mixed recall mixes a real loss (item 1)
+with a measurement gap.
+
+- Add a candidate source that returns all listed pictures (raster boxes
+  from `get_image_rects`, plus vector boxes), and report mixed recall from
+  it. Keep the vector-only source for the vector-only group.
+
+### 3. Shared time budget starves vector detection on long manuals
+
+With the default 20 s budget the vector pass stops early:
+
+- CAT manual (530 pages): 2 vector drawings listed. The raster loop uses
+  most of the budget, including time spent on rasters skipped by count.
+- Compact manual on a slower machine: vector scan stopped at page 130 of
+  220.
+
+A long manual is the main use case, so this must work by default.
+
+- Give vector detection its own time budget
+  (`VECTOR_DETECTION_TIMEOUT_SECONDS`), separate from raster extraction.
+  Keep the shared decoded-byte and store budgets.
+- Stop counting rasters after the raster count cap is reached; skip them
+  without decoding work beyond what is needed for the report.
+- Add a cheap page prefilter before `detect_vector_drawings()`: skip pages
+  with no layout `picture` box and fewer than N non-frame paths. Call
+  `page.find_tables()` only when a fallback cluster needs the table check.
+- Record per-page detection time in the acceptance run; list the 5 slowest
+  pages.
+- Target: the full CAT manual and the full compact manual finish vector
+  detection without a `time` stop on the reference machine.
+
+### 4. Truncation is under-reported
+
+When the deadline hits at page level the loop adds 1 to `skipped` and
+breaks. The report then says "1 skipped" although the rest of the document
+was never scanned.
+
+- Add `vector_pages_scanned` and `vector_pages_total` to the report.
+- `truncated` must be true whenever `vector_pages_scanned <
+  vector_pages_total`.
+- Test: tiny time budget on a multi-page PDF → pages scanned < total,
+  truncated true.
+
+### 5. Hard-coded thresholds
+
+The plan says all thresholds are settings. These are still literals in
+`vector_drawings.py`: merge gap `85.0`, overlap ratios `0.35`, figure-ID
+search margins `100` and `150`, fallback table rule `0.35`, `0.08`, `0.2`,
+split offsets `4.0`, `8.0`, `16.0`.
+
+- Move them into `VectorDrawingSettings` with comments.
+- Allow overriding the settings through environment variables or one
+  settings object passed from `pictures.py`; document the names.
+
+### 6. Figure-ID pattern is manual-specific
+
+`_FIGURE_ID = (?:TX|TS)\d{5,}` matches this manual's IDs only. On other
+documents split and merge rules silently fall back to geometry.
+
+- Make the pattern a setting (list of regexes), default to the current one.
+- Document in README that figure-ID rules are optional hints and what
+  happens when no ID is found.
+- Report in the CAT run how many vector drawings were split or merged by ID
+  (expected near zero) so the fallback behaviour is visible.
+
+### 7. Picture count change for consumers
+
+Before 0.5.0 one convert returned at most 80 pictures. Now it can return 80
+rasters plus 120 vectors. doc2graph captions every picture.
+
+- State the new maximum and the env names in README and in the changelog
+  of 0.5.0.
+- Keep `MAX_PICTURES` working as a total cap if it is set, so an operator
+  can keep the old limit.
+
+Stop here for review. Report: test count, both acceptance runs with
+per-group recall and precision (mixed from item 2), vector pages scanned vs
+total for both manuals, total time ratio, peak memory.
+
+### Review completion 2026-10-20
+
+All seven items were implemented.
+
+- Tests: 87 passed before the final release verification.
+- Compact corpus: vector-only recall 97.6%, precision 90.9%; mixed
+  raster/vector recall 100.0%, precision 78.9%; negatives returned no
+  candidates.
+- Compact full run: 220/220 vector pages scanned, 1.33x text-only time,
+  866.9 MiB peak RSS.
+- CAT full run: 530/530 vector pages scanned, 1.22x text-only time,
+  1070.1 MiB peak RSS; 80 rasters and 4 vectors downloaded with no failed
+  GET or raster-byte mismatch.
+- Neither run stopped vector detection on time.

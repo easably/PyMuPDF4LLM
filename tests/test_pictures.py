@@ -15,6 +15,7 @@ from pymupdf4llm_service.pdf_to_page_markdown import pdf_to_page_markdown
 from pymupdf4llm_service.pictures import (
     PictureStore,
     cut_embedded_pictures,
+    cut_pictures,
     empty_picture_report,
     picture_store,
 )
@@ -71,7 +72,7 @@ def test_convert_without_the_flag_does_not_cut_pictures(monkeypatch) -> None:
     def refuse(_document):
         raise AssertionError("picture extraction must not run")
 
-    monkeypatch.setattr("pymupdf4llm_service.pdf_to_page_markdown.cut_embedded_pictures", refuse)
+    monkeypatch.setattr("pymupdf4llm_service.pdf_to_page_markdown.cut_pictures", refuse)
     client = TestClient(app)
     response = client.post(
         "/v1/convert",
@@ -81,7 +82,7 @@ def test_convert_without_the_flag_does_not_cut_pictures(monkeypatch) -> None:
     body = response.json()
     assert body["pictures"] == []
     assert body["picture_report"]["requested"] is False
-    assert body["picture_report"]["scope"] == "embedded_raster"
+    assert body["picture_report"]["scope"] == "embedded_raster_and_vector_drawing"
     assert body["picture_report"]["listed"] == 0
 
 
@@ -102,7 +103,8 @@ def test_convert_lists_a_picture_and_get_returns_png() -> None:
     assert body["picture_report"]["requested"] is True
     assert body["picture_report"]["truncated"] is False
     assert body["picture_report"]["listed"] == 1
-    assert body["picture_report"]["scope"] == "embedded_raster"
+    assert body["picture_report"]["scope"] == "embedded_raster_and_vector_drawing"
+    assert pictures[0]["kind"] == "embedded_raster"
     fetched = client.get(f"/v1/pictures/{pictures[0]['id']}")
     assert fetched.status_code == 200
     assert fetched.headers["content-type"].startswith("image/png")
@@ -128,7 +130,126 @@ def test_repeated_logo_can_be_fetched_from_both_pages() -> None:
     assert response.json()["picture_report"]["listed"] == 2
 
 
-def test_vector_drawing_is_not_an_embedded_picture() -> None:
+def test_raster_and_vector_share_visual_page_order() -> None:
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_image(
+        pymupdf.Rect(20, 20, 140, 160),
+        stream=_raster_png(),
+    )
+    page.draw_rect(pymupdf.Rect(30, 220, 220, 380), width=2)
+    page.draw_line((40, 230), (210, 370), width=2)
+    chunks = [
+        {
+            "metadata": {"page_number": 1},
+            "page_boxes": [{"class": "picture", "bbox": [30, 220, 220, 380]}],
+        }
+    ]
+    try:
+        cut = cut_pictures(document, chunks)
+    finally:
+        document.close()
+
+    assert [item["kind"] for item in cut["pictures"]] == [
+        "embedded_raster",
+        "vector_drawing",
+    ]
+    assert [item["index_on_page"] for item in cut["pictures"]] == [0, 1]
+    assert cut["report"]["by_kind"]["embedded_raster"]["listed"] == 1
+    assert cut["report"]["by_kind"]["vector_drawing"]["listed"] == 1
+    picture_store.release_many([item["id"] for item in cut["pictures"]])
+
+
+def test_vector_count_limit_reports_omission(monkeypatch) -> None:
+    monkeypatch.setenv("MAX_VECTOR_PICTURES", "1")
+    document = pymupdf.open()
+    page = document.new_page()
+    for box in (pymupdf.Rect(20, 20, 150, 140), pymupdf.Rect(20, 220, 150, 340)):
+        page.draw_rect(box, width=2)
+        page.draw_line(box.top_left, box.bottom_right, width=2)
+    chunks = [
+        {
+            "metadata": {"page_number": 1},
+            "page_boxes": [
+                {"class": "picture", "bbox": [20, 20, 150, 140]},
+                {"class": "picture", "bbox": [20, 220, 150, 340]},
+            ],
+        }
+    ]
+    try:
+        cut = cut_pictures(document, chunks)
+    finally:
+        document.close()
+
+    assert cut["report"]["by_kind"]["vector_drawing"] == {
+        "listed": 1,
+        "skipped": 1,
+    }
+    assert cut["report"]["reasons"]["count"] == 1
+    assert cut["report"]["truncated"] is True
+    picture_store.release_many([item["id"] for item in cut["pictures"]])
+
+
+def test_vector_limits_report_time_decoded_storage_and_render_failure(
+    monkeypatch,
+) -> None:
+    chunks = [
+        {
+            "metadata": {"page_number": 1},
+            "page_boxes": [{"class": "picture", "bbox": [20, 20, 200, 180]}],
+        }
+    ]
+
+    def make_document() -> pymupdf.Document:
+        document = pymupdf.open()
+        page = document.new_page()
+        page.draw_rect(pymupdf.Rect(20, 20, 200, 180), width=2)
+        page.draw_line((30, 30), (190, 170), width=2)
+        return document
+
+    monkeypatch.setenv("VECTOR_DETECTION_TIMEOUT_SECONDS", "0.000000001")
+    document = make_document()
+    try:
+        timed = cut_pictures(document, chunks)
+    finally:
+        document.close()
+    assert timed["report"]["reasons"]["time"] == 1
+
+    monkeypatch.delenv("VECTOR_DETECTION_TIMEOUT_SECONDS")
+    monkeypatch.setenv("MAX_PICTURE_PNG_BYTES", "10")
+    document = make_document()
+    try:
+        decoded = cut_pictures(document, chunks)
+    finally:
+        document.close()
+    assert decoded["report"]["reasons"]["decoded_size"] == 1
+
+    monkeypatch.delenv("MAX_PICTURE_PNG_BYTES")
+    monkeypatch.setattr(
+        "pymupdf4llm_service.pictures.picture_store.put",
+        lambda _png: None,
+    )
+    document = make_document()
+    try:
+        unstored = cut_pictures(document, chunks)
+    finally:
+        document.close()
+    assert unstored["report"]["reasons"]["storage"] == 1
+
+    def fail_render(*_args, **_kwargs):
+        raise RuntimeError("render failed")
+
+    monkeypatch.undo()
+    monkeypatch.setattr(pymupdf.Page, "get_pixmap", fail_render)
+    document = make_document()
+    try:
+        failed = cut_pictures(document, chunks)
+    finally:
+        document.close()
+    assert failed["report"]["reasons"]["render_failure"] == 1
+
+
+def test_vector_drawing_is_returned_as_a_picture() -> None:
     client = TestClient(app)
     response = client.post(
         "/v1/convert",
@@ -137,11 +258,15 @@ def test_vector_drawing_is_not_an_embedded_picture() -> None:
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["pictures"] == []
-    assert body["picture_report"]["listed"] == 0
+    assert len(body["pictures"]) == 1
+    assert body["pictures"][0]["kind"] == "vector_drawing"
+    assert body["picture_report"]["listed"] == 1
     assert body["picture_report"]["skipped"] == 0
     assert body["picture_report"]["truncated"] is False
     assert "Valve diagram" in body["pages"][0]["markdown"]
+    fetched = client.get(f"/v1/pictures/{body['pictures'][0]['id']}")
+    assert fetched.status_code == 200
+    assert fetched.content.startswith(b"\x89PNG")
 
 
 def test_missing_picture_is_not_found() -> None:
@@ -153,7 +278,7 @@ def test_missing_picture_is_not_found() -> None:
 def test_encoded_size_skips_decode(monkeypatch) -> None:
     monkeypatch.setattr(
         "pymupdf4llm_service.pictures._stream_length",
-        lambda _document, _xref: 20_000_000,
+        lambda _document, _xref, **_kwargs: 20_000_000,
     )
 
     def refuse(_document, _xref: int) -> bytes:
@@ -168,6 +293,98 @@ def test_encoded_size_skips_decode(monkeypatch) -> None:
     assert cut["pictures"] == []
     assert cut["report"]["reasons"]["encoded_size"] == 1
     assert cut["report"]["truncated"] is True
+
+
+def test_indirect_stream_length_raster_is_returned() -> None:
+    document = _open(_pdf_with_rasters())
+    try:
+        xref = int(document[0].get_images()[0][0])
+        kind, value = document.xref_get_key(xref, "Length")
+        assert kind == "int"
+        length_xref = document.get_new_xref()
+        document.update_object(length_xref, value)
+        document.xref_set_key(xref, "Length", f"{length_xref} 0 R")
+        assert document.xref_get_key(xref, "Length")[0] == "xref"
+
+        cut = cut_embedded_pictures(document)
+    finally:
+        document.close()
+
+    assert len(cut["pictures"]) == 1
+    assert cut["pictures"][0]["kind"] == "embedded_raster"
+    assert cut["report"]["reasons"]["encoded_size"] == 0
+    picture_store.release_many([item["id"] for item in cut["pictures"]])
+
+
+def test_skipped_raster_does_not_hide_vector_drawing(monkeypatch) -> None:
+    monkeypatch.setenv("MAX_PICTURE_STREAM_BYTES", "1")
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_image(
+        pymupdf.Rect(20, 20, 140, 160),
+        stream=_raster_png(),
+    )
+    page.draw_rect(pymupdf.Rect(180, 20, 360, 180), width=2)
+    chunks = [
+        {
+            "metadata": {"page_number": 1},
+            "page_boxes": [{"class": "picture", "bbox": [20, 20, 360, 180]}],
+        }
+    ]
+    try:
+        cut = cut_pictures(document, chunks)
+    finally:
+        document.close()
+
+    assert [item["kind"] for item in cut["pictures"]] == ["vector_drawing"]
+    assert cut["report"]["by_kind"]["embedded_raster"]["skipped"] == 1
+    picture_store.release_many([item["id"] for item in cut["pictures"]])
+
+
+def test_vector_timeout_reports_incomplete_page_scan(monkeypatch) -> None:
+    monkeypatch.setenv("VECTOR_DETECTION_TIMEOUT_SECONDS", "0.000000001")
+    document = pymupdf.open()
+    for _ in range(3):
+        page = document.new_page()
+        page.draw_rect(pymupdf.Rect(20, 20, 200, 180), width=2)
+    chunks = [
+        {"metadata": {"page_number": page}, "page_boxes": []}
+        for page in range(1, 4)
+    ]
+    try:
+        cut = cut_pictures(document, chunks)
+    finally:
+        document.close()
+
+    assert cut["report"]["vector_pages_scanned"] < 3
+    assert cut["report"]["vector_pages_total"] == 3
+    assert cut["report"]["truncated"] is True
+
+
+def test_max_pictures_remains_a_total_cap(monkeypatch) -> None:
+    monkeypatch.setenv("MAX_PICTURES", "1")
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_image(
+        pymupdf.Rect(20, 20, 140, 160),
+        stream=_raster_png(),
+    )
+    page.draw_rect(pymupdf.Rect(180, 20, 360, 180), width=2)
+    chunks = [
+        {
+            "metadata": {"page_number": 1},
+            "page_boxes": [{"class": "picture", "bbox": [180, 20, 360, 180]}],
+        }
+    ]
+    try:
+        cut = cut_pictures(document, chunks)
+    finally:
+        document.close()
+
+    assert len(cut["pictures"]) == 1
+    assert cut["pictures"][0]["kind"] == "embedded_raster"
+    assert cut["report"]["by_kind"]["vector_drawing"]["skipped"] == 1
+    picture_store.release_many([item["id"] for item in cut["pictures"]])
 
 
 def test_each_limit_reports_a_reason(monkeypatch) -> None:
@@ -198,7 +415,11 @@ def test_each_limit_reports_a_reason(monkeypatch) -> None:
 def test_mixed_pdf_returns_one_picture_and_skips_the_other(monkeypatch) -> None:
     calls = {"n": 0}
 
-    def length(document: pymupdf.Document, xref: int) -> int | None:
+    def length(
+        document: pymupdf.Document,
+        xref: int,
+        **_kwargs,
+    ) -> int | None:
         kind, value = document.xref_get_key(xref, "Length")
         if calls["n"] >= 1:
             return 20_000_000
@@ -265,7 +486,7 @@ def test_timeout_is_checked_between_pictures(monkeypatch) -> None:
 def test_failed_conversion_drops_stored_pictures(monkeypatch) -> None:
     stored: list[str] = []
 
-    def cut_then_fail(_document):
+    def cut_then_fail(_document, _chunks):
         picture_id = picture_store.put(b"\x89PNG\r\n")
         assert picture_id is not None
         stored.append(picture_id)
@@ -281,7 +502,7 @@ def test_failed_conversion_drops_stored_pictures(monkeypatch) -> None:
         lambda *_args, **_kwargs: [{"metadata": {"page_number": 1}, "text": "Pump"}],
     )
     monkeypatch.setattr(
-        "pymupdf4llm_service.pdf_to_page_markdown.cut_embedded_pictures",
+        "pymupdf4llm_service.pdf_to_page_markdown.cut_pictures",
         cut_then_fail,
     )
     try:

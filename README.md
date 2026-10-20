@@ -20,7 +20,49 @@ follow the main column instead of appearing beside their related question.
 
 `page` is 1-based. Empty pages are omitted. `force_ocr=true` is rejected. Picture bytes are not in the JSON. Fetch each listed id with `GET /v1/pictures/{id}` (`image/png`). Each occurrence has its own id, including a logo repeated on another page. Ids are transient and exist only in this process. Run one instance unless a shared store is added on purpose. A fetched id is removed. Unfetched ids expire after ten minutes.
 
-The picture list is embedded raster images only. It does not include vector drawings, diagrams inferred from page layout, or a rendered scan page. Rasters under 100 pixels on a side are ignored and are not counted as omissions. A raster is skipped before decode when its compressed stream is over 8 MiB, that length cannot be measured, or its pixel size would exceed the 64 MiB decode budget. At most 80 pictures are listed. The in-memory store for all PDFs together stays within 64 MiB (`MAX_PICTURE_STORE_BYTES`). A picture that does not fit is omitted with reason `storage`. `PICTURE_EXTRACT_TIMEOUT_SECONDS` (default 20) stops the cut between pictures. It does not interrupt one picture that has already started decoding. `picture_report.reasons` counts omissions as `time`, `count`, `encoded_size`, `decoded_size`, `unreadable`, or `storage`. `truncated` is true when any eligible embedded raster was omitted. `GET /health` includes `picture_store_bytes` and `picture_store_ids`.
+The picture list contains embedded rasters and vector drawings, identified by
+`kind`. It does not contain a rendered whole page. Rasters under 100 pixels on
+a side are ignored and are not counted as omissions. Raster and vector count
+limits are separate (`MAX_RASTER_PICTURES`, default 80, and
+`MAX_VECTOR_PICTURES`, default 120), so the default maximum is 200. If
+`MAX_PICTURES` is set, it remains a total cap across both kinds. Decoded PNG
+bytes and the 64 MiB in-memory store are shared.
+`PICTURE_EXTRACT_TIMEOUT_SECONDS` (default 20) limits raster extraction;
+`VECTOR_DETECTION_TIMEOUT_SECONDS` (default 60) separately limits the vector
+page scan. Both are checked between units of work. `picture_report.reasons` counts
+known omissions as `time`, `count`, `encoded_size`, `decoded_size`,
+`unreadable`, `storage`, or `render_failure`. `by_kind` separates raster and
+vector totals, and `vector_detectors` reports listed layout and fallback
+detections. `vector_pages_scanned` and `vector_pages_total` make an incomplete
+long-document scan explicit; `vector_slowest_pages` contains its five slowest
+pages. `truncated` is true when an eligible picture was omitted or the vector
+scan did not reach the last page.
+`GET /health` includes `picture_store_bytes` and `picture_store_ids`.
+
+Vector detection thresholds can be overridden with these environment
+variables:
+
+- `VECTOR_MINIMUM_SIDE`, `VECTOR_MINIMUM_PATHS`,
+  `VECTOR_MAXIMUM_PAGE_AREA_SHARE`,
+  `VECTOR_FALLBACK_MAXIMUM_PAGE_AREA_SHARE`
+- `VECTOR_TABLE_OVERLAP_SHARE`, `VECTOR_COVERED_PATH_SHARE`,
+  `VECTOR_DUPLICATE_IOU`, `VECTOR_MARGIN`
+- `VECTOR_CLUSTER_X_TOLERANCE`, `VECTOR_CLUSTER_Y_TOLERANCE`,
+  `VECTOR_PREFILTER_MIN_PATHS`
+- `VECTOR_FALLBACK_TABLE_MIN_WIDTH_SHARE`,
+  `VECTOR_FALLBACK_TABLE_MIN_AREA_SHARE`,
+  `VECTOR_FALLBACK_TABLE_WITHOUT_ID_OVERLAP_SHARE`,
+  `VECTOR_FALLBACK_FIGURE_ID_MARGIN`
+- `VECTOR_MERGE_FIGURE_ID_MARGIN`, `VECTOR_MERGE_HORIZONTAL_GAP`,
+  `VECTOR_MERGE_VERTICAL_GAP`, `VECTOR_MERGE_OVERLAP_SHARE`
+- `VECTOR_SPLIT_VERTICAL_END_OFFSET`, `VECTOR_SPLIT_VERTICAL_START_OFFSET`,
+  `VECTOR_SPLIT_HORIZONTAL_END_OFFSET`, `VECTOR_SPLIT_HORIZONTAL_START_OFFSET`,
+  `VECTOR_SPLIT_MARGIN`, `VECTOR_SPLIT_PATH_MIN_EXTENT`
+
+`VECTOR_FIGURE_ID_PATTERNS` is an optional `;;`-separated list of regular
+expressions. Its default recognizes `TX…` and `TS…` IDs from the reference
+manual. IDs are only hints for splitting and merging; when none match, the
+detector falls back to layout and geometry.
 
 ```json
 {
@@ -29,10 +71,10 @@ The picture list is embedded raster images only. It does not include vector draw
     {"page": 1, "markdown": "..."}
   ],
   "pictures": [
-    {"id": "picture-id", "page": 1, "index_on_page": 0, "width": 800, "height": 600}
+    {"id": "picture-id", "page": 1, "index_on_page": 0, "width": 800, "height": 600, "kind": "vector_drawing"}
   ],
   "picture_report": {
-    "scope": "embedded_raster",
+    "scope": "embedded_raster_and_vector_drawing",
     "requested": true,
     "truncated": false,
     "listed": 1,
@@ -43,8 +85,18 @@ The picture list is embedded raster images only. It does not include vector draw
       "encoded_size": 0,
       "decoded_size": 0,
       "unreadable": 0,
-      "storage": 0
-    }
+      "storage": 0,
+      "render_failure": 0
+    },
+    "by_kind": {
+      "embedded_raster": {"listed": 0, "skipped": 0},
+      "vector_drawing": {"listed": 1, "skipped": 0}
+    },
+    "vector_detectors": {"layout": 1, "fallback": 0},
+    "vector_id_actions": {"split": 0, "merged": 0},
+    "vector_pages_scanned": 2,
+    "vector_pages_total": 2,
+    "vector_slowest_pages": [{"page": 1, "seconds": 0.012345}]
   }
 }
 ```

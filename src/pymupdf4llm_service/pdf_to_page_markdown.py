@@ -17,7 +17,7 @@ import pymupdf
 import pymupdf4llm
 
 from pymupdf4llm_service.pictures import (
-    cut_embedded_pictures,
+    cut_pictures,
     empty_picture_report,
     picture_store,
 )
@@ -76,7 +76,7 @@ def pdf_to_page_markdown(
                             document[page_number - 1], chunk
                         )
             if include_pictures:
-                cut = cut_embedded_pictures(document)
+                cut = cut_pictures(document, chunks)
                 pictures = cut["pictures"]
                 report = cut["report"]
         finally:

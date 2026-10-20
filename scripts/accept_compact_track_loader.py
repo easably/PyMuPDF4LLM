@@ -335,6 +335,7 @@ def render_report(
     pdf_path: Path,
     sha256: str,
     candidate_source: str,
+    mixed_candidate_source: str | None,
     threshold: float,
     elapsed_seconds: float,
     peak_rss_bytes: int,
@@ -346,6 +347,11 @@ def render_report(
         f"- PDF: `{pdf_path}`",
         f"- SHA-256: `{sha256}`",
         f"- Candidate source: `{candidate_source}`",
+        (
+            f"- Mixed-page candidate source: `{mixed_candidate_source}`"
+            if mixed_candidate_source
+            else "- Mixed-page candidate source: same as candidate source"
+        ),
         f"- IoU threshold: `{threshold}`",
         f"- Layout time: `{elapsed_seconds:.2f} s`",
         f"- Peak process RSS: `{peak_rss_bytes / 1024 / 1024:.1f} MiB`",
@@ -424,6 +430,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pdf", type=Path, default=DEFAULT_PDF)
     parser.add_argument("--labels", type=Path, default=DEFAULT_LABELS)
     parser.add_argument("--candidate-source", default="raw-layout")
+    parser.add_argument("--mixed-candidate-source")
     parser.add_argument("--iou-threshold", type=float)
     parser.add_argument("--report", type=Path)
     return parser.parse_args()
@@ -481,6 +488,20 @@ def main() -> int:
             raise RuntimeError(f"missing chunks for labeled pages: {missing}")
         source = load_candidate_source(args.candidate_source)
         candidates = source(document, chunks_by_page, selected_pages)
+        if args.mixed_candidate_source:
+            mixed_pages = [
+                int(item["page"])
+                for item in labels["pages"]
+                if item["group"] == "mixed"
+            ]
+            mixed_source = load_candidate_source(args.mixed_candidate_source)
+            mixed_candidates = mixed_source(document, chunks_by_page, mixed_pages)
+            mixed_page_set = set(mixed_pages)
+            candidates = [
+                candidate
+                for candidate in candidates
+                if int(candidate["page"]) not in mixed_page_set
+            ] + mixed_candidates
     finally:
         document.close()
 
@@ -494,6 +515,7 @@ def main() -> int:
         pdf_path=args.pdf,
         sha256=actual_sha256,
         candidate_source=args.candidate_source,
+        mixed_candidate_source=args.mixed_candidate_source,
         threshold=threshold,
         elapsed_seconds=elapsed,
         peak_rss_bytes=memory.peak_bytes,

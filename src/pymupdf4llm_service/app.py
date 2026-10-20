@@ -29,7 +29,7 @@ if _CONVERT_LIMIT < 1:
 if _QUEUE_LIMIT < 0:
     raise RuntimeError("MAX_QUEUED_CONVERTS must be at least 0")
 
-app = FastAPI(title="PyMuPDF4LLM text service", version="0.4.0")
+app = FastAPI(title="PyMuPDF4LLM text service", version="0.5.0")
 
 
 class _InFlight:

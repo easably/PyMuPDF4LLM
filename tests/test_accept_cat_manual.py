@@ -65,7 +65,103 @@ def test_memory_log_peak_and_png_header() -> None:
     assert header[1] == 9
 
 
-def _png(width: int, height: int) -> bytes:
+def test_spot_check_compares_only_embedded_rasters(monkeypatch) -> None:
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_image(pymupdf.Rect(0, 0, 120, 140), stream=_png(120, 140))
+    xref = int(page.get_images()[0][0])
+    raster = accept._extract_png(document, xref)
+    assert raster is not None
+    vector = _png(200, 100)
+    pictures = [
+        {
+            "id": "vector",
+            "page": 1,
+            "index_on_page": 0,
+            "width": 200,
+            "height": 100,
+            "kind": "vector_drawing",
+        },
+        {
+            "id": "raster",
+            "page": 1,
+            "index_on_page": 1,
+            "width": 120,
+            "height": 140,
+            "kind": "embedded_raster",
+        },
+    ]
+    downloads = [
+        accept.Download("vector", 1, 0, 200, 100, 200, 0.01, vector, ""),
+        accept.Download("raster", 1, 1, 120, 140, 200, 0.01, raster, ""),
+    ]
+    monkeypatch.setattr(accept, "FOCUS_PAGES", (1,))
+    inventory = accept.inventory_document(document)
+
+    spots = accept.spot_check(document, inventory, pictures, downloads, None)
+    document.close()
+
+    assert spots[0].api_count == 1
+    assert spots[0].errors == []
+    assert "1 vector drawing(s)" in spots[0].notes[0]
+
+
+def test_spot_check_matches_same_sized_rasters_independent_of_api_order(
+    monkeypatch,
+) -> None:
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_image(
+        pymupdf.Rect(0, 200, 120, 340),
+        stream=_png(120, 140, red=10),
+    )
+    page.insert_image(
+        pymupdf.Rect(0, 0, 120, 140),
+        stream=_png(120, 140, red=200),
+    )
+    xrefs = [int(item[0]) for item in page.get_images()]
+    pngs = [accept._extract_png(document, xref) for xref in reversed(xrefs)]
+    assert all(png is not None for png in pngs)
+    pictures = [
+        {
+            "id": f"raster-{index}",
+            "page": 1,
+            "index_on_page": index,
+            "width": 120,
+            "height": 140,
+            "kind": "embedded_raster",
+        }
+        for index in range(2)
+    ]
+    downloads = [
+        accept.Download(
+            f"raster-{index}",
+            1,
+            index,
+            120,
+            140,
+            200,
+            0.01,
+            png or b"",
+            "",
+        )
+        for index, png in enumerate(pngs)
+    ]
+    monkeypatch.setattr(accept, "FOCUS_PAGES", (1,))
+
+    spots = accept.spot_check(
+        document,
+        accept.inventory_document(document),
+        pictures,
+        downloads,
+        None,
+    )
+    document.close()
+
+    assert spots[0].errors == []
+
+
+def _png(width: int, height: int, red: int = 10) -> bytes:
     pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, width, height), 0)
-    pixmap.set_rect(pixmap.irect, (10, 20, 30))
+    pixmap.set_rect(pixmap.irect, (red, 20, 30))
     return pixmap.tobytes("png")

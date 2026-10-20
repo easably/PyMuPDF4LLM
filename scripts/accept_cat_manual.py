@@ -40,10 +40,12 @@ LIVE_SERVICE_HOSTS = {"pymupdf4llm"}
 # Same defaults as pymupdf4llm_service.pictures. Inventory uses these static
 # checks. The running service may stop earlier on time, count, or memory.
 MIN_SIDE = 100
-MAX_PICTURES = 80
+MAX_RASTER_PICTURES = 80
+MAX_VECTOR_PICTURES = 120
 MAX_STREAM_BYTES = 8 * 1024 * 1024
 MAX_PNG_BYTES = 64 * 1024 * 1024
 PICTURE_TIMEOUT_SECONDS = 20.0
+VECTOR_TIMEOUT_SECONDS = 60.0
 STORE_BYTES = 64 * 1024 * 1024
 
 _MEM_UNITS = {
@@ -294,18 +296,29 @@ def spot_check(
 ) -> list[Spot]:
     by_id = {item.picture_id: item for item in downloads}
     eligible = [item for item in inventory.occurrences if item.static_filter is None]
-    cursor = 0
     spots: list[Spot] = []
     if save_dir is not None:
         save_dir.mkdir(parents=True, exist_ok=True)
     for page in FOCUS_PAGES:
-        api_pics = [item for item in pictures if int(item.get("page") or 0) == page]
+        page_pics = [item for item in pictures if int(item.get("page") or 0) == page]
+        page_pics.sort(key=lambda item: int(item.get("index_on_page") or 0))
+        api_pics = [
+            item
+            for item in page_pics
+            if item.get("kind", "embedded_raster") == "embedded_raster"
+        ]
         api_pics.sort(key=lambda item: int(item.get("index_on_page") or 0))
         page_eligible = [item for item in eligible if item.page == page]
+        unmatched = list(page_eligible)
         spot = Spot(page=page, api_count=len(api_pics), eligible_count=len(page_eligible))
-        indexes = [int(item.get("index_on_page") or 0) for item in api_pics]
+        indexes = [int(item.get("index_on_page") or 0) for item in page_pics]
         if indexes != list(range(len(indexes))):
             spot.errors.append(f"index_on_page is not 0..{len(indexes) - 1}: {indexes}")
+        vector_count = len(page_pics) - len(api_pics)
+        if vector_count:
+            spot.notes.append(
+                f"{vector_count} vector drawing(s) excluded from raster byte comparison"
+            )
         seen_hash: dict[str, int] = {}
         for picture in api_pics:
             if int(picture.get("page") or 0) != page:
@@ -330,22 +343,34 @@ def spot_check(
                 )
             else:
                 seen_hash[digest] = int(picture.get("index_on_page") or 0)
-            match: Occurrence | None = None
-            while cursor < len(eligible):
-                candidate = eligible[cursor]
-                cursor += 1
-                if (
-                    candidate.page == page
-                    and candidate.width == int(picture["width"])
-                    and candidate.height == int(picture["height"])
-                ):
-                    match = candidate
-                    break
-            if match is None:
+            same_size = [
+                candidate
+                for candidate in unmatched
+                if candidate.width == int(picture["width"])
+                and candidate.height == int(picture["height"])
+            ]
+            match = next(
+                (
+                    candidate
+                    for candidate in same_size
+                    if hashlib.sha256(
+                        _extract_png(document, candidate.xref) or b""
+                    ).hexdigest()
+                    == digest
+                ),
+                None,
+            )
+            if match is None and not same_size:
                 spot.errors.append(
                     f"no eligible PDF image matches {picture['width']}x{picture['height']} on page {page}"
                 )
                 continue
+            if match is None:
+                spot.errors.append(
+                    f"PNG bytes differ from all {len(same_size)} same-sized PDF image(s)"
+                )
+                continue
+            unmatched.remove(match)
             local = _extract_png(document, match.xref)
             if local is None:
                 spot.errors.append(f"xref {match.xref} did not extract locally")
@@ -518,18 +543,20 @@ def render_report(result: RunResult) -> str:
         "",
         "## Service limits used for the static inventory",
         "",
-        "These match the image defaults. The live container does not set MAX_PICTURES or the picture byte limits.",
+        "These match the image defaults. MAX_PICTURES is unset, so the separate kind caps apply.",
         "",
-        f"- MAX_PICTURES: {MAX_PICTURES}",
+        f"- MAX_RASTER_PICTURES: {MAX_RASTER_PICTURES}",
+        f"- MAX_VECTOR_PICTURES: {MAX_VECTOR_PICTURES}",
         f"- MAX_PICTURE_STREAM_BYTES: {MAX_STREAM_BYTES}",
         f"- MAX_PICTURE_PNG_BYTES: {MAX_PNG_BYTES}",
         f"- MAX_PICTURE_STORE_BYTES: {STORE_BYTES}",
         f"- PICTURE_EXTRACT_TIMEOUT_SECONDS: {PICTURE_TIMEOUT_SECONDS}",
+        f"- VECTOR_DETECTION_TIMEOUT_SECONDS: {VECTOR_TIMEOUT_SECONDS}",
         f"- minimum side: {MIN_SIDE}px (masks and smaller rasters are not API omissions)",
         "",
         "## Timings",
         "",
-        "No pass/fail time limit. Text time is a separate POST with include_pictures=false. Picture time is not a timer inside that process: this image does not return one. The full POST includes text again, then the picture cut.",
+        "No pass/fail time limit. Text time is a separate POST with include_pictures=false. The full POST includes text again, raster extraction, and vector detection.",
         "",
         f"- Inventory (local, not HTTP): {result.inventory_seconds:.3f}s",
         f"- Text request: {_seconds(result.text_request_seconds)}",
@@ -581,16 +608,17 @@ def render_report(result: RunResult) -> str:
             f"- GET success: {got}",
             f"- GET failed: {failed}",
             "",
-            "After MAX_PICTURES or the picture timeout, later images that are not masks and not under 100px are counted under that stop reason, including ones that a static size filter would also have rejected. Masks and sub-100px rasters stay out of both `listed` and `skipped`.",
+            "After the raster count cap or raster timeout, later images that are not masks and not under 100px are counted under that stop reason, including ones that a static size filter would also have rejected. Masks and sub-100px rasters stay out of both `listed` and `skipped`.",
             "",
         ]
     )
     if pictures:
-        lines.append("| page | index_on_page | width | height | bytes | GET |")
-        lines.append("| --- | --- | --- | --- | --- | --- |")
+        lines.append("| page | index_on_page | kind | width | height | bytes | GET |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- |")
         for item, download in zip(pictures, result.downloads):
             lines.append(
-                f"| {item.get('page')} | {item.get('index_on_page')} | {item.get('width')} | "
+                f"| {item.get('page')} | {item.get('index_on_page')} | "
+                f"{item.get('kind', 'embedded_raster')} | {item.get('width')} | "
                 f"{item.get('height')} | {len(download.png)} | {download.status} |"
             )
         lines.append("")
@@ -598,20 +626,43 @@ def render_report(result: RunResult) -> str:
     for key in ("time", "count", "storage"):
         if int(reasons.get(key) or 0) > 0:
             stop_bits.append(f"{key}={reasons.get(key)}")
+    by_kind = report.get("by_kind") or {}
+    raster_report = by_kind.get("embedded_raster") or {}
+    vector_report = by_kind.get("vector_drawing") or {}
     lines.extend(
         [
             "### Why the API list is shorter than the inventory",
             "",
             f"- Static eligible occurrences: {counts['eligible']}",
-            f"- API listed: {report.get('listed')}",
-            f"- API skipped: {report.get('skipped')}",
+            f"- Embedded rasters listed: {raster_report.get('listed', report.get('listed'))}",
+            f"- Embedded rasters skipped: {raster_report.get('skipped', report.get('skipped'))}",
+            f"- Vector drawings listed: {vector_report.get('listed', 0)}",
+            f"- Vector drawings skipped: {vector_report.get('skipped', 0)}",
             f"- API truncated: {report.get('truncated')}",
             f"- Stop counters in the response: {', '.join(stop_bits) or 'none recorded'}",
             f"- Other API reasons: encoded_size={reasons.get('encoded_size', 0)}, "
             f"decoded_size={reasons.get('decoded_size', 0)}, "
             f"unreadable={reasons.get('unreadable', 0)}, storage={reasons.get('storage', 0)}",
             "",
-            "The service lists at most 80 pictures and stops the cut about 20 seconds after it starts, between pictures. Memory pressure shows up as `storage` when the PNG store cannot keep another blob. None of those runtime stops is the eligible inventory count.",
+            "Raster and vector count and time limits are separate. Memory pressure shows up as `storage` when the PNG store cannot keep another blob. None of those runtime stops is the eligible raster inventory count.",
+            "",
+            "## Vector scan",
+            "",
+            f"- Pages scanned: {report.get('vector_pages_scanned', 0)} / {report.get('vector_pages_total', 0)}",
+            f"- ID actions: `{json.dumps(report.get('vector_id_actions') or {}, sort_keys=True)}`",
+            "- Five slowest pages:",
+        ]
+    )
+    slowest = report.get("vector_slowest_pages") or []
+    if slowest:
+        lines.extend(
+            f"  - page {item.get('page')}: {float(item.get('seconds') or 0):.6f}s"
+            for item in slowest
+        )
+    else:
+        lines.append("  - none recorded")
+    lines.extend(
+        [
             "",
             "## Focus pages",
             "",
