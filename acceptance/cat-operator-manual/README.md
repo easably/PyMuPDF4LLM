@@ -15,6 +15,25 @@ Quality investigations live in `analyses/`. The comparison of the current OCR
 policy, no OCR, and page text thresholds is
 `analyses/2026-10-16-ocr-policy.md`.
 
+## Vector holdout
+
+`holdout-labels.json` is a second-manual check against overfitting on the
+compact track loader. Run it with the same metric script:
+
+```bash
+.venv/bin/python scripts/accept_compact_track_loader.py \
+  --pdf tessdata/pdfs/cat-operator-manual-320-323.pdf \
+  --labels acceptance/cat-operator-manual/holdout-labels.json \
+  --candidate-source pymupdf4llm_service.vector_drawings:vector_candidates \
+  --mixed-candidate-source pymupdf4llm_service.vector_drawings:all_picture_candidates \
+  --report acceptance/cat-operator-manual/runs/2026-10-20-holdout.md
+```
+
+The 2026-10-20 holdout found mixed-page raster recall 100% and precision 90%,
+with three logo/header false vectors and one table false vector. Path-heavy
+table pages stayed empty. This manual has almost no vector-only drawings, so
+it is a false-positive / raster check, not a second vector recall corpus.
+
 ## Local
 
 Start the service yourself, then point the script at it.

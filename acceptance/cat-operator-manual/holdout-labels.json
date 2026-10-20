@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "purpose": "Holdout against overfitting on the compact-track-loader corpus. CAT uses Illustration N / g0… IDs, not TX|TS. Most figures are embedded rasters; path-heavy pages are usually tables. Logos and headers must not count as drawings.",
+  "pdf": {
+    "file_name": "cat-operator-manual-320-323.pdf",
+    "sha256": "5c0fdb73e305224777d690543f3394246a8da252577e7b97ac1d3f8724d017ab",
+    "page_count": 530
+  },
+  "matching": {
+    "strategy": "greedy_descending_iou",
+    "iou_threshold": 0.5,
+    "duplicates_are_false_pictures": true
+  },
+  "reference_pages": [1, 24, 74, 330, 500, 530],
+  "pages": [
+    {
+      "page": 1,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [
+        {"type": "logo", "bbox": [48, 40, 121, 81]},
+        {"type": "header_banner", "bbox": [48, 742, 564, 768]}
+      ],
+      "text_phrases": ["Important Safety Information"],
+      "legend_lines": []
+    },
+    {
+      "page": 2,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "text", "bbox": [50, 80, 560, 700]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 24,
+      "group": "mixed",
+      "drawings": [
+        {"id": "p024-illust-a", "label": "machine illustration A", "source": "raster", "bbox": [54, 93, 288, 237]},
+        {"id": "p024-illust-b", "label": "machine illustration B", "source": "raster", "bbox": [54, 288, 288, 432]},
+        {"id": "p024-illust-c", "label": "machine illustration C", "source": "raster", "bbox": [54, 513, 288, 657]},
+        {"id": "p024-illust-d", "label": "machine illustration D", "source": "raster", "bbox": [324, 397, 558, 541]}
+      ],
+      "not_pictures": [],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 26,
+      "group": "mixed",
+      "drawings": [
+        {"id": "p026-illust-a", "label": "machine illustration top", "source": "raster", "bbox": [54, 93, 288, 309]},
+        {"id": "p026-illust-b", "label": "machine illustration bottom", "source": "raster", "bbox": [54, 408, 288, 697]}
+      ],
+      "not_pictures": [],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 42,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [50, 100, 560, 700]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 62,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [50, 100, 560, 700]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 74,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [50, 80, 560, 720]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 80,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "table", "bbox": [50, 80, 560, 720]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 330,
+      "group": "mixed",
+      "drawings": [
+        {
+          "id": "p330-joysticks",
+          "label": "vertical slider joystick controls illustration",
+          "source": "raster",
+          "bbox": [54, 126, 558, 342]
+        }
+      ],
+      "not_pictures": [{"type": "table", "bbox": [50, 420, 560, 700]}],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 500,
+      "group": "mixed",
+      "drawings": [
+        {
+          "id": "p500-sampling-valve",
+          "label": "hydraulic oil sampling valve photograph",
+          "source": "raster",
+          "bbox": [54, 93, 288, 237]
+        },
+        {
+          "id": "p500-excavator",
+          "label": "excavator park position illustration",
+          "source": "raster",
+          "bbox": [324, 386, 558, 530]
+        }
+      ],
+      "not_pictures": [
+        {"type": "table", "bbox": [322, 297, 560, 364]}
+      ],
+      "text_phrases": [],
+      "legend_lines": []
+    },
+    {
+      "page": 530,
+      "group": "negative",
+      "drawings": [],
+      "not_pictures": [{"type": "logo", "bbox": [268, 301, 337, 338]}],
+      "text_phrases": [],
+      "legend_lines": []
+    }
+  ]
+}

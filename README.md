@@ -146,3 +146,9 @@ PYTHONPATH=src .venv/bin/uvicorn pymupdf4llm_service.app:app --port 8080
 ## Acceptance run
 
 `scripts/accept_cat_manual.py` is a manual check for one long local PDF. pytest and CI do not run it and do not need the file. How to run it, and the recorded runs, are in `acceptance/cat-operator-manual/`.
+
+Drawing detection is measured on the compact track loader corpus and on a CAT
+holdout (`acceptance/cat-operator-manual/holdout-labels.json`). On the CAT
+holdout (2026-10-20, no tuning): mixed raster recall 100%, precision 90%;
+three logo/header false vectors and one table false vector; table pages empty.
+Compact corpus 100% precision is corpus-fit, not a general claim.

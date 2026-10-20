@@ -342,7 +342,7 @@ def render_report(
     result: dict[str, Any],
 ) -> str:
     lines = [
-        "# Compact track loader baseline",
+        f"# Drawing acceptance — {pdf_path.name}",
         "",
         f"- PDF: `{pdf_path}`",
         f"- SHA-256: `{sha256}`",

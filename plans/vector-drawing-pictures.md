@@ -324,3 +324,87 @@ Items 8–10 done. Item 11 measured, default unchanged. Item 12 not run
 - Raster cap stays 80: both manuals still have hundreds of leftover
   rasters; raising the default is a caption-cost choice for doc2graph.
 - Prefilter 5 and 10 keep 100% labeled recall; default remains 1.
+
+## Review 2026-10-20 (3): commit efafc6b — ready for staging test
+
+Checked: displayed-size filter, `raster_cap_reached_at_page`, fallback
+leftovers absorbed into neighbouring pictures, memory documented, 91 tests
+pass (Linux, Python 3.10). Nothing blocks a staging test. Item 12 is the
+next step.
+
+### 13. Staging test plan (doc2graph)
+
+Run on the compact manual and the CAT manual, both against 0.5.0:
+
+1. Container workflow green; record the image digest.
+2. `include_pictures=true`, `repair_picture_text=false`: doc2graph accepts
+   `kind` and the new report fields; no client errors.
+3. Same with `repair_picture_text=true`: compare search answers before and
+   after on fixed questions (H-pattern bucket dump, page 85; radio button 8,
+   page 68; EMU indicator 14, page 181; hinge pin height, page 205).
+4. Record caption calls per manual and total indexing time.
+
+### 14. Raster cap is a consumer decision, measure it on staging
+
+With the default `MAX_RASTER_PICTURES=80`, rasters stop at page 58 of 220
+(compact) and page 111 of 530 (CAT). Later photos are not returned at all.
+
+- On staging, run the compact manual twice: default 80 and a high cap
+  (for example 300). Record caption calls, time, and whether answers about
+  pages after 58 improve.
+- Pick the doc2graph deploy value from that, not from the service default.
+
+### 15. Holdout check against overfitting
+
+Corpus precision went to 100% after rule changes and one label edit
+(p184-dial) on the same corpus. Before calling the detector done:
+
+- Label 10–15 drawing pages from a second manual that was not used for
+  tuning (CAT, or another vendor without TX-style IDs).
+- Run the acceptance script on it with current defaults, no tuning.
+- Record recall and precision as the honest number in the README.
+
+Items 13–14 are needed before production. Item 15 can run in parallel
+with staging.
+
+### Review 3 notes 2026-10-20
+
+Item 15 started. CAT is a bad second *vector* corpus: almost no
+vector-only drawings; path-heavy pages are tables; listed service vectors
+on CAT were logos/headers (pages 1, 530) plus one table strip (page 500).
+
+Holdout labels: `acceptance/cat-operator-manual/holdout-labels.json`
+(11 pages). Run: `runs/2026-10-20-holdout.md`.
+
+| Group | Recall | Precision | Notes |
+| --- | --- | --- | --- |
+| mixed | 100% | 90% | 9 raster drawings; 1 false table |
+| negative | n/a | 0% | 3 false: 2 logos, 1 header banner |
+
+No detector tuning on this holdout. Items 13–14 still need a staging
+doc2graph run (compact + CAT, caps 80 vs 300). Optional follow-up: reject
+logo/header-sized clusters so CAT pages 1 and 530 stay empty.
+
+### Review 2026-10-20 (4): holdout result
+
+The holdout is honest and useful, but it does not give an independent
+vector recall number: CAT has almost no vector-only drawings. It confirms
+raster recall and finds false vectors. Staging (items 13–14) is not
+blocked.
+
+16. Commit the holdout labels, run file, script change, and README text
+    as they are.
+17. Small false-positive fix, then rerun both corpora:
+    - Reject vector candidates whose centre lies in a layout `page-header`
+      or `page-footer` box, or in the top or bottom margin band of the page
+      (setting, start 8% of page height), unless a figure ID or caption is
+      next to them. Target: CAT pages 1 and 530 return no vector.
+    - Check why page 500's table strip passed the fallback table check
+      (`find_tables()` result, cluster size). Fix only if it is a
+      threshold, not a new rule.
+    - Compact corpus must stay at 100% recall; report precision on both.
+18. Independent vector recall still open. Needs a third PDF with real
+    vector drawings and no TX/TS IDs (another vendor's manual). When one is
+    available: label 10–15 drawing pages, run with current defaults, record
+    the number in README. Until then README states vector recall is
+    measured on one manual only.
