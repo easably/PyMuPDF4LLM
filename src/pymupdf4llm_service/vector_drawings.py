@@ -54,6 +54,7 @@ class VectorDrawingSettings:
     prefilter_min_paths: int = 1
     edge_band_share: float = 0.08
     caption_margin: float = 36.0
+    logo_max_area_pt2: float = 4000.0
     figure_id_patterns: tuple[str, ...] = (r"\b(?:TX|TS)\d{5,}",)
 
     @classmethod
@@ -105,6 +106,7 @@ _NUMERIC_SETTING_FIELDS: dict[str, type[int] | type[float]] = {
     "prefilter_min_paths": int,
     "edge_band_share": float,
     "caption_margin": float,
+    "logo_max_area_pt2": float,
 }
 
 
@@ -118,6 +120,27 @@ def detect_vector_drawings(
     page_boxes: Sequence[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Return vector boxes with ``layout`` or ``fallback`` detector labels."""
+    result = detect_vector_drawings_with_stats(
+        page,
+        layout_boxes,
+        settings,
+        raster_boxes=raster_boxes,
+        paths=paths,
+        page_boxes=page_boxes,
+    )
+    return result["drawings"]
+
+
+def detect_vector_drawings_with_stats(
+    page: Any,
+    layout_boxes: Sequence[Sequence[float]],
+    settings: VectorDrawingSettings | None = None,
+    *,
+    raster_boxes: Sequence[Sequence[float]] | None = None,
+    paths: Sequence[dict[str, Any]] | None = None,
+    page_boxes: Sequence[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Like :func:`detect_vector_drawings`, plus drop counters for the report."""
     config = settings or VectorDrawingSettings.from_environment()
     page_box = _rect(page.rect)
     paths = list(paths) if paths is not None else page.get_drawings()
@@ -139,10 +162,12 @@ def detect_vector_drawings(
     )
     found: list[dict[str, Any]] = []
     layout_regions: list[tuple[RectTuple, bool]] = []
-    rejected_layout: list[RectTuple] = []
+    text_only_rejects: list[RectTuple] = []
     for result in refined:
-        if result.reason in {"text_only", "too_small", "frame_sized"}:
-            rejected_layout.append(result.original_bbox)
+        if result.reason == "text_only":
+            # Only text_only: frame_sized / too_small may still hold a real
+            # drawing that fallback must be allowed to find.
+            text_only_rejects.append(result.original_bbox)
             continue
         if result.reason not in {"accepted", "shrunk"} or result.final_bbox is None:
             continue
@@ -232,10 +257,10 @@ def detect_vector_drawings(
                 continue
             if any(
                 _intersection_share(cluster, rejected) >= config.covered_path_share
-                for rejected in rejected_layout
+                for rejected in text_only_rejects
             ):
-                # Layout already said this region is not a drawing; do not
-                # resurrect it when find_tables() is empty after pymupdf.layout.
+                # Layout said text_only (no useful vectors). Do not resurrect
+                # when find_tables() is empty after pymupdf.layout.
                 continue
             page_width = page_box[2] - page_box[0]
             page_area = _area(page_box)
@@ -284,18 +309,23 @@ def detect_vector_drawings(
 
     # Drop mid-page logo marks: small area, no figure id or caption.
     # Thin wide drawings (bolt-head strips) keep a large area and survive.
-    found = [
-        item
-        for item in found
-        if not (
-            _area(_rect(item["bbox"])) < 4000.0
-            and not _has_drawing_evidence(
-                _rect(item["bbox"]), caption_boxes, text_spans, config
-            )
-        )
-    ]
-    found.sort(key=lambda item: (item["bbox"][1], item["bbox"][0]))
-    return found
+    # On manuals without TX-style IDs or "Figure N" captions, real drawings
+    # under ~sqrt(logo_max_area_pt2) on a side are also dropped.
+    kept: list[dict[str, Any]] = []
+    dropped_small_no_evidence = 0
+    for item in found:
+        box = _rect(item["bbox"])
+        if _area(box) < config.logo_max_area_pt2 and not _has_drawing_evidence(
+            box, caption_boxes, text_spans, config
+        ):
+            dropped_small_no_evidence += 1
+            continue
+        kept.append(item)
+    kept.sort(key=lambda item: (item["bbox"][1], item["bbox"][0]))
+    return {
+        "drawings": kept,
+        "dropped_small_no_evidence": dropped_small_no_evidence,
+    }
 
 
 def vector_candidates(

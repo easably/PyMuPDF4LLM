@@ -1,12 +1,16 @@
-# Drawing acceptance — cat-operator-manual-320-323.pdf
+# Drawing acceptance — cat-operator-manual-320-323.pdf (after tuning)
+
+After the chrome/logo/`text_only` filter. Not an untuned holdout: pages 1, 500,
+and 530 were fixed on this manual. Untuned numbers:
+`runs/2026-10-20-holdout.md` (mixed precision 90%).
 
 - PDF: `tessdata/pdfs/cat-operator-manual-320-323.pdf`
 - SHA-256: `5c0fdb73e305224777d690543f3394246a8da252577e7b97ac1d3f8724d017ab`
 - Candidate source: `pymupdf4llm_service.vector_drawings:vector_candidates`
 - Mixed-page candidate source: `pymupdf4llm_service.vector_drawings:all_picture_candidates`
 - IoU threshold: `0.5`
-- Layout time: `33.08 s`
-- Peak process RSS: `624.1 MiB`
+- Layout time: `33.15 s`
+- Peak process RSS: `669.8 MiB`
 
 ## Drawing metrics
 
@@ -39,7 +43,6 @@
 
 | Page | Location | Phrase |
 | ---: | --- | --- |
-| 1 | missing | Important Safety Information |
 
 ## Legend integrity
 

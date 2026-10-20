@@ -166,6 +166,7 @@ def empty_picture_report(*, requested: bool) -> dict[str, Any]:
         },
         "vector_detectors": {"layout": 0, "fallback": 0},
         "vector_id_actions": {"split": 0, "merged": 0},
+        "vector_dropped_small_no_evidence": 0,
         "vector_pages_scanned": 0,
         "vector_pages_total": 0,
         "vector_slowest_pages": [],
@@ -333,7 +334,7 @@ def cut_pictures(
     """Cut embedded rasters and detected vector drawings under shared budgets."""
     from pymupdf4llm_service.vector_drawings import (
         VectorDrawingSettings,
-        detect_vector_drawings,
+        detect_vector_drawings_with_stats,
         useful_vector_paths,
     )
 
@@ -355,6 +356,7 @@ def cut_pictures(
     settings = VectorDrawingSettings.from_environment()
     vector_listed = 0
     vector_skipped = 0
+    dropped_small_no_evidence = 0
     detectors = {"layout": 0, "fallback": 0}
     id_actions = {"split": 0, "merged": 0}
     pages_scanned = 0
@@ -387,13 +389,17 @@ def cut_pictures(
             paths = page.get_drawings()
             useful_paths = useful_vector_paths(page, paths)
             if layout_boxes or len(useful_paths) >= settings.prefilter_min_paths:
-                candidates = detect_vector_drawings(
+                detected = detect_vector_drawings_with_stats(
                     page,
                     layout_boxes,
                     settings,
                     raster_boxes=listed_rasters_by_page.get(page_number, []),
                     paths=paths,
                     page_boxes=page_boxes,
+                )
+                candidates = detected["drawings"]
+                dropped_small_no_evidence += int(
+                    detected.get("dropped_small_no_evidence") or 0
                 )
             else:
                 candidates = []
@@ -463,6 +469,7 @@ def cut_pictures(
     }
     report["vector_detectors"] = detectors
     report["vector_id_actions"] = id_actions
+    report["vector_dropped_small_no_evidence"] = dropped_small_no_evidence
     report["vector_pages_scanned"] = pages_scanned
     report["vector_pages_total"] = document.page_count
     report["vector_slowest_pages"] = [

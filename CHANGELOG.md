@@ -15,6 +15,7 @@
   `raster_cap_reached_at_page` records where the cap stopped listing.
 - Reject vector candidates in layout `page-header` / `page-footer` or in the
   top/bottom page edge band (default 8% of page height) unless a figure id or
-  caption is nearby; drop small-area logo marks without evidence; do not
-  resurrect layout regions rejected as `text_only`.
+  caption is nearby; drop small-area logo marks without evidence
+  (`VECTOR_LOGO_MAX_AREA_PT2`, reported as `vector_dropped_small_no_evidence`);
+  do not resurrect layout regions rejected as `text_only` only.
 - Keep picture-text repair opt-in with `repair_picture_text=true`.

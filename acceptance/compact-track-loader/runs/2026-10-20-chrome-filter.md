@@ -5,8 +5,8 @@
 - Candidate source: `pymupdf4llm_service.vector_drawings:vector_candidates`
 - Mixed-page candidate source: `pymupdf4llm_service.vector_drawings:all_picture_candidates`
 - IoU threshold: `0.5`
-- Layout time: `19.52 s`
-- Peak process RSS: `595.4 MiB`
+- Layout time: `19.68 s`
+- Peak process RSS: `566.5 MiB`
 
 ## Drawing metrics
 

@@ -147,10 +147,13 @@ PYTHONPATH=src .venv/bin/uvicorn pymupdf4llm_service.app:app --port 8080
 
 `scripts/accept_cat_manual.py` is a manual check for one long local PDF. pytest and CI do not run it and do not need the file. How to run it, and the recorded runs, are in `acceptance/cat-operator-manual/`.
 
-Drawing detection is measured on the compact track loader corpus and on a CAT
-holdout (`acceptance/cat-operator-manual/holdout-labels.json`). Vector recall
-is measured on the compact manual only until a third vendor PDF with real
-vector drawings is labeled. After the chrome/logo filter (2026-10-20): compact
-vector-only and mixed both 100% recall and precision; CAT holdout mixed raster
-recall/precision 100%, negatives empty (no logo/header/table false vectors).
-Compact 100% alone is still corpus-fit, not a general claim.
+Drawing detection is measured on the compact track loader corpus. Vector recall
+is measured on that one manual only until a third vendor PDF with real vector
+drawings (no TX/TS IDs) is labeled. The CAT labels
+(`acceptance/cat-operator-manual/holdout-labels.json`) started as a holdout;
+after chrome/logo fixes tuned on CAT pages 1/500/530, the untuned CAT number
+is the first run (mixed precision 90%, three logo/header false vectors, one
+table). The later CAT run is after tuning. Compact 100% is corpus-fit, not a
+general claim. Small drawings without a figure id or caption under
+`VECTOR_LOGO_MAX_AREA_PT2` (default 4000 pt², ~63×63) are dropped; the count
+is `vector_dropped_small_no_evidence` in the picture report.

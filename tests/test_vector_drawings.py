@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pymupdf
 
+import pymupdf4llm_service.vector_drawings as vector_drawings_module
+from pymupdf4llm_service.picture_boxes import CandidateResult
 from pymupdf4llm_service.vector_drawings import (
     VectorDrawingSettings,
     detect_vector_drawings,
@@ -131,10 +133,52 @@ def test_layout_text_only_region_is_not_resurrected_by_fallback() -> None:
         page.insert_text((60, 180), "row 3")
 
         # Layout marks the ruled block as a picture; refine rejects it as
-        # text_only / table-like. Fallback must not bring it back.
+        # text_only. Fallback must not bring it back.
         assert detect_vector_drawings(page, [(40, 80, 340, 200)]) == []
     finally:
         document.close()
+
+
+def test_fallback_still_finds_drawing_inside_frame_sized_layout_reject(
+    monkeypatch,
+) -> None:
+    document, page = _page()
+    try:
+        page.draw_rect(pymupdf.Rect(120, 180, 260, 300), width=2)
+        page.draw_line((130, 190), (250, 290), width=2)
+        page.insert_text((120, 320), "TX100077")
+
+        def fake_refine(**_kwargs):
+            return [
+                CandidateResult(
+                    0,
+                    (0.0, 0.0, 400.0, 500.0),
+                    None,
+                    "frame_sized",
+                    {},
+                )
+            ]
+
+        monkeypatch.setattr(
+            vector_drawings_module, "refine_candidates", fake_refine
+        )
+
+        found = detect_vector_drawings(page, [(0, 0, 400, 500)])
+
+        assert len(found) == 1
+        assert found[0]["detector"] == "fallback"
+        assert found[0]["bbox"][0] <= 122
+        assert found[0]["bbox"][2] >= 258
+    finally:
+        document.close()
+
+
+def test_logo_max_area_loads_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("VECTOR_LOGO_MAX_AREA_PT2", "1234.5")
+
+    settings = VectorDrawingSettings.from_environment()
+
+    assert settings.logo_max_area_pt2 == 1234.5
 
 
 def test_fallback_fragment_is_absorbed_into_the_layout_drawing() -> None:

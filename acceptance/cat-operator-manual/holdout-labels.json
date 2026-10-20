@@ -21,7 +21,7 @@
         {"type": "logo", "bbox": [48, 40, 121, 81]},
         {"type": "header_banner", "bbox": [48, 742, 564, 768]}
       ],
-      "text_phrases": ["Important Safety Information"],
+      "text_phrases": [],
       "legend_lines": []
     },
     {

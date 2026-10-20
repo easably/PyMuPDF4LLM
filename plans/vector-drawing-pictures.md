@@ -427,3 +427,47 @@ Item 16 committed (`3b9b587`). Item 17 done:
   negatives empty; pages 1, 500, 530 clean.
 - 94 tests pass. Item 18 blocked until a third vendor PDF is available.
   Items 13–14 still need staging doc2graph.
+
+### Review 2026-10-20 (5): commit f4a5558
+
+Chrome/logo filter works on both corpora, 94 tests pass. Not blocking
+staging. Small follow-ups:
+
+19. **CAT is no longer a holdout.** Pages 1, 500, 530 were fixed after
+    being found on it, so 100% on CAT is now also corpus-fit. In README and
+    the CAT run file, keep the first holdout number (mixed precision 90%,
+    3 logo/header false vectors, 1 table) as the untuned result and label
+    the new run "after tuning". Item 18 (third vendor PDF) is the only real
+    holdout left.
+20. **Do not suppress fallback inside `frame_sized` / `too_small` layout
+    rejects.** Page 500 needed only `text_only` (checked: both rejected
+    layout boxes there are `text_only`). A `frame_sized` reject can be a
+    whole section that contains a real drawing; suppressing clusters
+    inside it removes that drawing. Keep only `text_only` in the set,
+    rerun both corpora, add a test: frame-sized layout box with a drawing
+    inside → fallback still returns the drawing.
+21. **Move the logo area literal `4000.0` into `VectorDrawingSettings`**
+    (`logo_max_area_pt2`, env `VECTOR_LOGO_MAX_AREA_PT2`). Document that a
+    small drawing without figure ID or caption is dropped, so on manuals
+    without TX-style IDs or "Figure N" captions small real drawings
+    (< ~63×63 pt) are lost. Report the count of drops in the picture report
+    (`vector_dropped_small_no_evidence`) so it is visible on new documents.
+22. **CAT page 1 text label.** "Important Safety Information" is not in the
+    text layer (checked with `get_text()`), so it can never pass. Remove it
+    from `text_phrases` or mark it as image text.
+23. Push `3b9b587` and `f4a5558` (local `main` is 2 ahead of
+    `origin/main`) before the staging run, so the image under test has
+    this filter.
+
+### Review 5 completion 2026-10-20
+
+Items 19–23 done in the follow-up commit:
+
+- README / CAT run file: first holdout stays the honest 90% figure; chrome
+  filter run labeled after tuning. Third vendor PDF still required (18/19).
+- Fallback suppress set is `text_only` only; test forces `frame_sized` and
+  expects fallback to keep the inner drawing.
+- `logo_max_area_pt2` / `VECTOR_LOGO_MAX_AREA_PT2`; report field
+  `vector_dropped_small_no_evidence`.
+- Removed impossible CAT page 1 `text_phrases` entry.
+- Push includes this commit so staging has the filter.
